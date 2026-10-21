@@ -38,6 +38,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Test published checksum selection
+        run: python3 .github/scripts/test_release_checksum.py
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 

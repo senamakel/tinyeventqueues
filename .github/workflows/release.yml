@@ -564,6 +564,16 @@ jobs:
               --generate-notes
           fi
 
+      - name: Download published checksum manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets/published
+          gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --pattern checksum.toml --dir release-assets/published
+
       - name: Verify the published module through TinyBus
         shell: bash
         env:
@@ -575,14 +585,23 @@ jobs:
           set -euo pipefail
           archive="${CRATE_NAME}-${VERSION}-ubuntu-24.04-x86_64.tar.gz"
           release_url="https://github.com/${REPOSITORY}/releases/tag/${RELEASE_TAG}"
-          sha256="$(
-            sed -n "s/^\"${archive}\" = \"\([0-9a-f]\{64\}\)\"$/\1/p" \
-              release-assets/checksum.toml
+          sha256="$(python3 - "$archive" release-assets/published/checksum.toml <<'PY'
+          import re
+          import sys
+          import tomllib
+
+          archive, checksum_path = sys.argv[1:]
+          with open(checksum_path, "rb") as checksum_file:
+              manifest = tomllib.load(checksum_file)
+
+          archive_sha256 = manifest.get("sha256", {}).get(archive)
+          if not isinstance(archive_sha256, str) or re.fullmatch(
+              r"[0-9a-f]{64}", archive_sha256
+          ) is None:
+              raise SystemExit(f"archive checksum missing or invalid for {archive}")
+          print(archive_sha256)
+          PY
           )"
-          if [[ -z "$sha256" ]]; then
-            echo "checksum missing for ${archive}" >&2
-            exit 1
-          fi
 
           cargo run --manifest-path vendor/tinybus/Cargo.toml --locked \
             --package tinybus --all-features --example github_module_host -- \
