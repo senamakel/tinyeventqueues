@@ -32,13 +32,13 @@ tinyeventqueues-bus = { path = "crates/tinyeventqueues-bus" }
 # TinyBus defines the message types, interface macro, and frozen module ABI
 # used by the generated integration. Socket and CLI features are unnecessary
 # here.
-tinybus = { version = ">=0.1.3, <0.2", default-features = false, features = [
+ tinybus = { version = ">=0.3.11, <0.4", default-features = false, features = [
     "macros",
     "modules",
 ] }
 # The module-side SDK owns the isolated runtime and exports the ABI entrypoints
 # required by TinyBus's dynamic loader.
-tinybus-module = ">=0.1.3, <0.2"
+tinybus-module = ">=0.3.11, <0.4"
 # Derive macros for the crate-wide error type in
 # `crates/tinyeventqueues/src/error/`.
 thiserror = "2"
@@ -52,14 +52,14 @@ serde_json = "1"
 #
 # Pinned to the tinyhumansai main revision that merged the queue port
 # (tinyhumansai/tinystoragedrivers#71, #72, #73).
-tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "0c6dcfce57201fadd830431f36fd759c3baa897a" }
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "a04e3a174fa8f28d5229a816ca6b39c72a9efd7b" }
 # The module side of the storage bus: `connect_storage` reaches the host's
 # `Storage` objects (documents and queues) for the one scope the host bound
 # this module to. Same pin as the core crate.
-tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "0c6dcfce57201fadd830431f36fd759c3baa897a" }
+tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "a04e3a174fa8f28d5229a816ca6b39c72a9efd7b" }
 # Test-only: serves the storage objects on an in-memory broker so the module's
 # storage path is exercised over the real bus.
-tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "0c6dcfce57201fadd830431f36fd759c3baa897a" }
+tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "a04e3a174fa8f28d5229a816ca6b39c72a9efd7b" }
 # Module diagnostics; the host installs the logger.
 log = "0.4"
 # The host-callback trait (`Host`) is an async trait object.
