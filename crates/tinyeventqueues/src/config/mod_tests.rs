@@ -263,6 +263,54 @@ fn more_out_of_range_values_are_named() {
 }
 
 #[test]
+fn queue_manifests_reject_invalid_declarations() {
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.version = 2;
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues.clear();
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues[0].owner = "another-module".into();
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues[0].description = "  ".into();
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues[0].name = "not a queue name".into();
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues[1].name = manifest.queues[0].name.clone();
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues[0].max_attempts = 0;
+    assert!(manifest.validate().is_err());
+
+    let mut manifest = shipped_manifest().unwrap();
+    manifest.queues[0].visibility_ms = 0;
+    assert!(manifest.validate().is_err());
+}
+
+#[tokio::test]
+async fn queue_manifest_apply_ensures_every_declared_queue() {
+    let fixture = crate::test_support::Fixture::new();
+    let manifest = shipped_manifest().unwrap();
+    assert!(manifest.get(&manifest.queues[0].name).is_some());
+    assert!(manifest.get("teq.not-declared").is_none());
+
+    manifest.apply(fixture.queues.as_ref()).await.unwrap();
+    for declaration in &manifest.queues {
+        fixture.queues.stats(&declaration.name).await.unwrap();
+    }
+}
+
+#[test]
 fn queue_references_are_checked_against_the_manifest() {
     let manifest = shipped_manifest().unwrap();
 

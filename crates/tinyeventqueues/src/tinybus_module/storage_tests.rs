@@ -142,3 +142,16 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
     served.shutdown().await.unwrap();
     assert!(backing.docs.get(OUTCOMES, "bound").await.is_err());
 }
+
+#[tokio::test]
+async fn an_invalid_storage_destination_is_rejected_before_connecting() {
+    let rig = rig(true).await;
+    let module = Connection::connect(rig.bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let refused = open(module, Some("")).await;
+    assert!(matches!(
+        refused,
+        Err(crate::Error::Storage(error)) if error.kind() == ErrorKind::Unavailable
+    ));
+}

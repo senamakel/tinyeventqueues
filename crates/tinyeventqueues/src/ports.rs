@@ -41,3 +41,7 @@ pub(crate) fn key_of(parts: &[&str]) -> Result<Key, StorageError> {
     }
     Key::new(encoded)
 }
+
+#[cfg(test)]
+#[path = "ports_tests.rs"]
+mod tests;

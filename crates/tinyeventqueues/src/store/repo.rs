@@ -105,3 +105,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync> Repo<T> {
         .into())
     }
 }
+
+#[cfg(test)]
+#[path = "repo_tests.rs"]
+mod tests;

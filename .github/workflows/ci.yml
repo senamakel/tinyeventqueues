@@ -53,6 +53,12 @@ jobs:
       - name: Test
         run: cargo test --all-features
 
+      # The all-features build enables `static-link`, which intentionally
+      # omits the dynamic module ABI symbols. Restore the default cdylib before
+      # the default test suite loads the module from disk.
+      - name: Build the default dynamic module
+        run: cargo build --workspace
+
       - name: Test default features
         run: cargo test
 
