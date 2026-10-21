@@ -85,6 +85,12 @@ jobs:
             exit 1
           fi
 
+      # Every library target and feature mode must stay free of concrete
+      # storage engines. The bus contract has a separate, stricter transport
+      # boundary above.
+      - name: Assert libraries stay engine-free
+        run: python3 .github/scripts/check-library-engines.py
+
       - name: Require 90% line coverage in every source file
         run: .github/scripts/check-file-coverage.sh 90 coverage.json
 

@@ -13,8 +13,8 @@ use tinyeventqueues::{
     CollectingSink, Disposition, Error, EventKind, InboundEvent, ManualClock, Pipeline, Reason,
     Sender, tinyeventqueues_bus,
 };
-use tinystoragedrivers_core::queue::DocumentQueue;
-use tinystoragedrivers_core::{MemoryStorage, Scope, StorageBackend};
+use tinystoragedrivers_testkit::memory_storage;
+use tinystoragedrivers_types::Scope;
 
 fn event(id: &str) -> InboundEvent {
     InboundEvent::new(
@@ -30,13 +30,11 @@ fn event(id: &str) -> InboundEvent {
 #[tokio::test]
 async fn a_restarted_pipeline_rejects_a_redelivery() {
     let clock = ManualClock::new(5_000);
-    let storage = MemoryStorage::with_clock(clock.clock())
-        .for_scope(&Scope::local())
-        .unwrap();
+    let storage = memory_storage(&Scope::new("public-api").unwrap());
     let docs = Arc::clone(storage.documents());
+    let queues = Arc::clone(storage.queues());
     let build = || async {
-        let queues = Arc::new(DocumentQueue::new(&docs).with_clock(clock.clock()));
-        Pipeline::builder(queues, Arc::clone(&docs))
+        Pipeline::builder(Arc::clone(&queues), Arc::clone(&docs))
             .clock(clock.clock())
             .build()
             .await
@@ -44,15 +42,12 @@ async fn a_restarted_pipeline_rejects_a_redelivery() {
     };
 
     let sink = Arc::new(CollectingSink::new());
-    let first = Pipeline::builder(
-        Arc::new(DocumentQueue::new(&docs).with_clock(clock.clock())),
-        Arc::clone(&docs),
-    )
-    .clock(clock.clock())
-    .sink(sink.clone())
-    .build()
-    .await
-    .unwrap();
+    let first = Pipeline::builder(Arc::clone(&queues), Arc::clone(&docs))
+        .clock(clock.clock())
+        .sink(sink.clone())
+        .build()
+        .await
+        .unwrap();
     let accepted = first.ingest(vec![event("delivery-1")]).await.unwrap();
     assert_eq!(accepted.results[0].disposition, Disposition::Accepted);
     assert_eq!(sink.outcomes()[0].reason, Reason::Ingested);
@@ -116,20 +111,16 @@ impl tinyeventqueues::Host for Agent {
 #[tokio::test]
 async fn a_host_receives_turns_from_drain() {
     let clock = ManualClock::new(5_000);
-    let storage = MemoryStorage::with_clock(clock.clock())
-        .for_scope(&Scope::local())
-        .unwrap();
+    let storage = memory_storage(&Scope::new("public-api-host").unwrap());
     let docs = Arc::clone(storage.documents());
+    let queues = Arc::clone(storage.queues());
     let agent = Arc::new(Agent::default());
-    let pipeline = Pipeline::builder(
-        Arc::new(DocumentQueue::new(&docs).with_clock(clock.clock())),
-        Arc::clone(&docs),
-    )
-    .clock(clock.clock())
-    .host(agent.clone())
-    .build()
-    .await
-    .unwrap();
+    let pipeline = Pipeline::builder(queues, Arc::clone(&docs))
+        .clock(clock.clock())
+        .host(agent.clone())
+        .build()
+        .await
+        .unwrap();
     let dm = InboundEvent::new(
         "web:chat",
         "1",

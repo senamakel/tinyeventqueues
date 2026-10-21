@@ -59,7 +59,7 @@ fn keys_resolve_back_to_their_cadence_or_to_instant() {
 
 async fn scheduler(fixture: &Fixture) -> Scheduler {
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    Scheduler::new(&fixture.docs).unwrap()
+    Scheduler::new(&fixture.docs)
 }
 
 #[tokio::test]
@@ -71,7 +71,7 @@ async fn the_schedule_is_created_once_and_survives_a_restart() {
         scheduler.next_due(&resolved, 1).await.unwrap(),
         Some(600_000)
     );
-    let restarted = Scheduler::new(&fixture.docs).unwrap();
+    let restarted = Scheduler::new(&fixture.docs);
     assert_eq!(
         restarted.next_due(&resolved, 599_999).await.unwrap(),
         Some(600_000)

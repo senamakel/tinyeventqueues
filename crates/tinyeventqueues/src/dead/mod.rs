@@ -21,10 +21,9 @@ mod types;
 
 use std::sync::Arc;
 
+use crate::ports::{DeadLetter, DocumentStore, NewMessage, Precondition, QueueStore, Retry};
 use serde_json::Value;
 use tinyeventqueues_bus::{DeadItem, Disposition, EventRef, Outcome, Reason};
-use tinystoragedrivers_core::queue::{DeadLetter, NewMessage, QueueStore, Retry};
-use tinystoragedrivers_core::{DocumentStore, Precondition};
 
 use crate::config::{QueueRef, ResolvedQueues};
 use crate::store::{Ledger, REDRIVEN};

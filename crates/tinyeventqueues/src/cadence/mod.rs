@@ -25,13 +25,12 @@ mod spec;
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, Filter, Precondition, Query, Sort, Versioned, key_of};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{Budget, EventRef, InboundEvent, Lane, PipelineConfig, RateLimit};
-use tinystoragedrivers_core::{
-    DocumentStore, Filter, Key, Precondition, Query, Repo, Sort, Versioned,
-};
 
 use crate::Result;
+use crate::store::Repo;
 use crate::store::{CADENCE, STAGED};
 
 pub use spec::{Cadence, CadenceError, Cron};
@@ -149,7 +148,7 @@ pub(crate) struct Scheduler {
 /// One entry per thread, whatever its cadence or lane: a thread's later
 /// turns fold into its waiting entry, so a turn never overtakes an older one.
 fn staged_id(first: &InboundEvent) -> Result<String> {
-    Ok(Key::of([
+    Ok(key_of(&[
         "staged",
         first.source.as_str(),
         first.conversation_key.as_str(),
@@ -160,12 +159,12 @@ fn staged_id(first: &InboundEvent) -> Result<String> {
 }
 
 impl Scheduler {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
             docs: Arc::clone(docs),
-            staged: Repo::new(docs, STAGED)?,
-            states: Repo::new(docs, CADENCE)?,
-        })
+            staged: Repo::new(docs, STAGED),
+            states: Repo::new(docs, CADENCE),
+        }
     }
 
     /// The per-second bucket of an instant cadence's budget.
@@ -251,7 +250,7 @@ impl Scheduler {
     /// The staged entry of `events`' conversation thread, if one waits.
     pub(crate) async fn entry_of(&self, first: &InboundEvent) -> Result<Option<Versioned<Staged>>> {
         let id = staged_id(first)?;
-        Ok(self.staged.get(&id).await?)
+        self.staged.get(&id).await
     }
 
     /// When the earliest staged entry is due, or `None` when nothing is

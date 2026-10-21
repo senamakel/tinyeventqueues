@@ -5,15 +5,13 @@
 
 use std::sync::Arc;
 
+use crate::ports::{
+    DeadLetter, Delivery, DocumentStore, Enqueued, NewMessage, QueueFeatures, QueueSpec,
+    QueueStats, QueueStore, Receipt, Retry, Scope, StorageError,
+};
 use async_trait::async_trait;
 use tinyeventqueues_bus::{EventKind, InboundEvent, Sender};
-use tinystoragedrivers_core::queue::{
-    DeadLetter, Delivery, DocumentQueue, Enqueued, NewMessage, QueueFeatures, QueueSpec,
-    QueueStats, QueueStore, Receipt, Retry,
-};
-use tinystoragedrivers_core::{
-    DocumentStore, MemoryStorage, Result, Scope, StorageBackend, StorageError,
-};
+use tinystoragedrivers_testkit::memory_storage;
 
 use crate::{ManualClock, Pipeline, PipelineBuilder};
 
@@ -36,15 +34,17 @@ impl Fixture {
     /// the `RabbitMQ` driver does.
     pub(crate) fn with_native(native: bool) -> Self {
         let clock = ManualClock::new(START_MS);
-        let storage = MemoryStorage::with_clock(clock.clock())
-            .for_scope(&Scope::local())
-            .unwrap();
+        let scope_text = format!("tinyeventqueues-test-{START_MS}");
+        let scope = Scope::new(&scope_text).unwrap();
+        let storage = memory_storage(&scope);
         let docs = Arc::clone(storage.documents());
-        let queue = DocumentQueue::new(&docs).with_clock(clock.clock());
+        let engine: Arc<dyn QueueStore> = Arc::new(
+            tinystoragedrivers_queue::MemoryQueue::with_clock(clock.clock()),
+        );
         let queues: Arc<dyn QueueStore> = if native {
-            Arc::new(queue)
+            engine
         } else {
-            Arc::new(Broker(queue))
+            Arc::new(Broker(engine))
         };
         Self {
             clock,
@@ -83,7 +83,7 @@ pub(crate) fn event(source: &str, id: &str, conversation: &str) -> InboundEvent 
 /// A queue backend like the `RabbitMQ` driver: no dedupe and no groups, and
 /// a message that sets `group` or `dedupe_key` is refused.
 #[derive(Debug)]
-pub(crate) struct Broker(pub(crate) DocumentQueue);
+pub(crate) struct Broker(pub(crate) Arc<dyn QueueStore>);
 
 #[async_trait]
 impl QueueStore for Broker {
@@ -94,10 +94,18 @@ impl QueueStore for Broker {
             ..self.0.features()
         }
     }
-    async fn ensure_queue(&self, queue: &str, spec: &QueueSpec) -> Result<()> {
+    async fn ensure_queue(
+        &self,
+        queue: &str,
+        spec: &QueueSpec,
+    ) -> std::result::Result<(), StorageError> {
         self.0.ensure_queue(queue, spec).await
     }
-    async fn enqueue(&self, queue: &str, messages: &[NewMessage]) -> Result<Vec<Enqueued>> {
+    async fn enqueue(
+        &self,
+        queue: &str,
+        messages: &[NewMessage],
+    ) -> std::result::Result<Vec<Enqueued>, StorageError> {
         if messages
             .iter()
             .any(|message| message.group.is_some() || message.dedupe_key.is_some())
@@ -114,28 +122,42 @@ impl QueueStore for Broker {
         max: u32,
         visibility_ms: u64,
         consumer: &str,
-    ) -> Result<Vec<Delivery>> {
+    ) -> std::result::Result<Vec<Delivery>, StorageError> {
         self.0.receive(queue, max, visibility_ms, consumer).await
     }
-    async fn ack(&self, queue: &str, receipt: &Receipt) -> Result<bool> {
+    async fn ack(&self, queue: &str, receipt: &Receipt) -> std::result::Result<bool, StorageError> {
         self.0.ack(queue, receipt).await
     }
-    async fn nack(&self, queue: &str, receipt: &Receipt, retry: Retry) -> Result<bool> {
+    async fn nack(
+        &self,
+        queue: &str,
+        receipt: &Receipt,
+        retry: Retry,
+    ) -> std::result::Result<bool, StorageError> {
         self.0.nack(queue, receipt, retry).await
     }
-    async fn extend(&self, queue: &str, receipt: &Receipt, visibility_ms: u64) -> Result<bool> {
+    async fn extend(
+        &self,
+        queue: &str,
+        receipt: &Receipt,
+        visibility_ms: u64,
+    ) -> std::result::Result<bool, StorageError> {
         self.0.extend(queue, receipt, visibility_ms).await
     }
-    async fn stats(&self, queue: &str) -> Result<QueueStats> {
+    async fn stats(&self, queue: &str) -> std::result::Result<QueueStats, StorageError> {
         self.0.stats(queue).await
     }
-    async fn dead_letters(&self, queue: &str, limit: usize) -> Result<Vec<DeadLetter>> {
+    async fn dead_letters(
+        &self,
+        queue: &str,
+        limit: usize,
+    ) -> std::result::Result<Vec<DeadLetter>, StorageError> {
         self.0.dead_letters(queue, limit).await
     }
-    async fn redrive(&self, queue: &str, id: &str) -> Result<bool> {
+    async fn redrive(&self, queue: &str, id: &str) -> std::result::Result<bool, StorageError> {
         self.0.redrive(queue, id).await
     }
-    async fn purge(&self, queue: &str) -> Result<u64> {
+    async fn purge(&self, queue: &str) -> std::result::Result<u64, StorageError> {
         self.0.purge(queue).await
     }
 }

@@ -157,13 +157,15 @@ are in `tinyeventqueues-bus`.
 
 ## Loaded module
 
-- Storage: the module connects to the host's `Storage` objects over the
-  storage bus and takes the one scope the host bound it to. Its `teq.*`
-  collections are declared by `tinyeventqueues-bus::storage::storage_schema()`
+- Storage: the module connects through the host-admitted storage callback and
+  takes the one scope the host bound it to. Its `teq.*` collections are
+  declared by `tinyeventqueues-bus::storage::collection_specs()`
   (owner `teq`, module scope), from which the host derives the grant; its
   queues are those `queues.json` declares, served by the host's queue port.
-  With no host storage the module runs on memory and logs an error.
-- Configuration: an optional private blob carries `queues` (a `queues.json`
+  Without the callback destination, setup fails; there is no in-memory
+  fallback.
+- Configuration: the host-provided private blob carries `storage_callback`
+  (the unique name for the admitted storage callback), plus `queues` (a `queues.json`
   document), `pipeline` (a `pipeline.json` document) and `timer` bounds;
   absent fields run the shipped files. The manifest is applied through the
   queue port at setup.

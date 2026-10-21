@@ -19,11 +19,11 @@
 //! Dead-lettered turns are parked in the dead-letter queue, where `ListDead`
 //! shows them and `Redrive` puts them back.
 
+use crate::ports::{Delivery, NewMessage, Retry};
 use tinyeventqueues_bus::{
     AckPolicy, DeliverRequest, DeliverStatus, DispatchConfig, Disposition, InboundEvent, Lane,
     Outcome, Reason, Turn,
 };
-use tinystoragedrivers_core::queue::{Delivery, NewMessage, Retry};
 
 use super::{Pipeline, Running};
 use crate::Result;

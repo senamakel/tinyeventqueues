@@ -48,7 +48,7 @@ fn every_shipped_queue_is_used_and_declares_a_lease() {
             "{} unused",
             declared.name
         );
-        assert!(declared.visibility_ms.is_some());
+        assert!(declared.visibility_ms > 0);
         assert_ne!(declared.description.len(), 0);
     }
 }
@@ -278,7 +278,7 @@ fn queue_references_are_checked_against_the_manifest() {
     assert!(error.to_string().contains("already used by ingress.queue"));
 
     let mut without_lease = manifest.clone();
-    without_lease.queues[0].visibility_ms = None;
+    without_lease.queues[0].visibility_ms = 0;
     let error = resolve_queues(&shipped_pipeline_config().unwrap(), &without_lease).unwrap_err();
     assert_eq!(field_of(error), "ingress.queue");
 }

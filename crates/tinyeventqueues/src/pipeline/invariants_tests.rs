@@ -244,7 +244,7 @@ async fn a_ten_thousand_event_flood_keeps_order_and_interactive_latency() {
 /// no tombstones behind, which keeps the in-memory queue small enough for a
 /// ten-thousand-event test to run quickly. Redelivery is not what this test
 /// is about.
-fn lean_manifest() -> tinystoragedrivers_core::queue::QueueManifest {
+fn lean_manifest() -> crate::config::QueueManifest {
     let mut manifest = crate::config::shipped_manifest().unwrap();
     for queue in &mut manifest.queues {
         queue.dedupe_window_ms = 0;

@@ -14,15 +14,17 @@
 //!   `source:event_id`, so a redelivery is recognized without the queue's help.
 
 mod ledger;
+mod repo;
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, Filter, Precondition, key_of};
 use serde::{Deserialize, Serialize};
-use tinystoragedrivers_core::{DocumentStore, Filter, Key, Precondition};
 
 use crate::Result;
 
 pub(crate) use ledger::Ledger;
+pub(crate) use repo::Repo;
 
 // The collection names and specs are the contract's, so the host's grant and
 // what the module ensures cannot drift.
@@ -41,7 +43,7 @@ pub(crate) async fn ensure(docs: &dyn DocumentStore) -> Result<()> {
 
 /// The document id of an event: its source and id, escaped and joined.
 pub(crate) fn event_id(source: &str, event_id: &str) -> Result<String> {
-    Ok(Key::of([source, event_id])?.as_str().to_owned())
+    Ok(key_of(&[source, event_id])?.as_str().to_owned())
 }
 
 /// An ingress tombstone.

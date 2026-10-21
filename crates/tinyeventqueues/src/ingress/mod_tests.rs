@@ -9,8 +9,8 @@ use tinyeventqueues_bus::{AckPolicy, Disposition, Reason, SourcePolicy};
 
 use super::*;
 use crate::observe::CollectingSink;
+use crate::ports::{ErrorKind, NewMessage};
 use crate::test_support::{Fixture, event};
-use tinystoragedrivers_core::queue::NewMessage;
 
 #[test]
 fn envelopes_with_empty_or_oversized_keys_are_invalid() {
@@ -145,7 +145,7 @@ async fn an_empty_request_stores_nothing() {
 
 #[tokio::test]
 async fn the_broker_double_passes_every_call_through() {
-    use tinystoragedrivers_core::queue::Retry;
+    use crate::ports::Retry;
 
     let fixture = Fixture::with_native(false);
     let pipeline = fixture.pipeline().await;
@@ -187,15 +187,12 @@ async fn the_broker_double_refuses_groups_and_dedupe_keys() {
             .enqueue(&queue, &[message])
             .await
             .unwrap_err();
-        assert_eq!(
-            error.kind(),
-            tinystoragedrivers_core::ErrorKind::InvalidInput
-        );
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
 }
 
 #[tokio::test]
 async fn the_broker_double_passes_the_queue_conformance_suite() {
     let fixture = Fixture::with_native(false);
-    tinystoragedrivers_core::conformance::run_queue(fixture.queues.as_ref()).await;
+    tinystoragedrivers_testkit::conformance::queue::run(fixture.queues.as_ref()).await;
 }

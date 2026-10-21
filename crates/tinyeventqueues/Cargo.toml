@@ -21,28 +21,31 @@ crate-type = ["rlib", "cdylib"]
 # The wire contract: the envelope, member names, payloads, outcomes and the
 # pipeline configuration. Re-exported wholesale from `src/lib.rs`.
 tinyeventqueues-bus = { workspace = true, features = ["storage"] }
-# Storage ports the pipeline runs over (see the root manifest for the pin).
-tinystoragedrivers-core = { workspace = true }
+# Storage ports and value types; concrete engines belong to the host.
+tinystoragedrivers-api = { workspace = true }
+tinystoragedrivers-types = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+sha2 = { workspace = true }
+data-encoding = { workspace = true }
 tinybus = { workspace = true }
 tinybus-module = { workspace = true }
 thiserror = { workspace = true }
 # The loaded module reaches the host's storage over the storage bus.
 tinystoragedrivers-busproxy = { workspace = true }
-# The module opens the bound bus transport as the shared scoped storage client.
-tinystoragedrivers-client = { workspace = true }
 # The module-owned pass timer and its wake-up signal.
 tokio = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
-# The queue conformance suite (`conformance::run_queue`) checks the broker
-# test double behaves like a real queue backend.
-tinystoragedrivers-core = { workspace = true, features = ["testkit"] }
+# Real in-memory engines and shared queue conformance checks, for tests only.
+tinystoragedrivers-testkit = { version = "2.1.2", git = "https://github.com/senamakel/tinystoragedrivers", rev = "400b71e5c40fe964130c89e981c64ddeead5619f" }
+# Deterministic queue-clock tests use the v2 memory engine with the pipeline
+# ManualClock; production still receives QueueStore only from the host.
+tinystoragedrivers-queue = { version = "2.1.2", git = "https://github.com/senamakel/tinystoragedrivers", rev = "400b71e5c40fe964130c89e981c64ddeead5619f" }
 # The public-API test implements the `Host` trait as a downstream host does.
 async-trait = { workspace = true }
 # The release verifier passes an explicit empty module configuration, and the
@@ -50,8 +53,6 @@ async-trait = { workspace = true }
 serde_json = { workspace = true }
 # Tests serve the storage objects on the in-memory broker the module connects
 # to, and use the broker test support.
-tinystoragedrivers-bus = { workspace = true }
-tinystoragedrivers-tinybus = { workspace = true }
 tinybus = { workspace = true, features = ["test-support"] }
 
 [features]

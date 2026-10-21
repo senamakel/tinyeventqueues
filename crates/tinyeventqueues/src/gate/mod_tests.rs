@@ -16,7 +16,7 @@ fn addressed(id: &str) -> InboundEvent {
 
 async fn gate(fixture: &Fixture) -> Gate {
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    Gate::new(&fixture.docs).unwrap()
+    Gate::new(&fixture.docs)
 }
 
 #[tokio::test]
@@ -120,7 +120,7 @@ async fn a_looping_bot_is_cut_off_until_its_window_passes() {
         Verdict::Drop(Reason::BotLoop)
     );
     // A restart does not reset the window.
-    let restarted = Gate::new(&fixture.docs).unwrap();
+    let restarted = Gate::new(&fixture.docs);
     assert_eq!(
         restarted.check(&from_bot("y"), &config, 900).await.unwrap(),
         Verdict::Drop(Reason::BotLoop)
@@ -154,7 +154,7 @@ async fn token_buckets_spill_over_budget_and_refill_across_restarts() {
         gate.check(&addressed("3"), &config, 0).await.unwrap(),
         Verdict::Spill(Reason::RateLimited)
     );
-    let restarted = Gate::new(&fixture.docs).unwrap();
+    let restarted = Gate::new(&fixture.docs);
     assert_eq!(
         restarted
             .check(&addressed("4"), &config, 999)
@@ -189,7 +189,7 @@ fn buckets_refill_proportionally_and_cap_at_capacity() {
 async fn bucket_state_ignores_a_clock_that_moves_backwards() {
     let fixture = Fixture::new();
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    let buckets = Buckets::new(&fixture.docs).unwrap();
+    let buckets = Buckets::new(&fixture.docs);
     let limit = RateLimit::new(1, 60);
     assert!(
         buckets
@@ -215,7 +215,7 @@ async fn bucket_state_ignores_a_clock_that_moves_backwards() {
 async fn ambient_context_is_bounded_deduplicated_and_released() {
     let fixture = Fixture::new();
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    let ambient = Ambient::new(&fixture.docs).unwrap();
+    let ambient = Ambient::new(&fixture.docs);
     let config = AmbientConfig::default();
     let small =
         serde_json::from_value::<AmbientConfig>(serde_json::json!({"max_items": 2})).unwrap();

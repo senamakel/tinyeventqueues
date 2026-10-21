@@ -95,7 +95,7 @@ fn decay_compounds_and_stops_at_zero() {
 async fn a_repeating_source_habituates_and_recovers_after_the_window() {
     let fixture = Fixture::new();
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    let habituation = Habituation::new(&fixture.docs).unwrap();
+    let habituation = Habituation::new(&fixture.docs);
     let config = HabituationConfig::default();
     let ping = |id: &str| event("webhook:monitor", id, "c").text("CPU usage above 90% on host-7");
     let first = habituation.apply(&ping("1"), 50, &config, 0).await.unwrap();
@@ -147,7 +147,7 @@ async fn a_repeating_source_habituates_and_recovers_after_the_window() {
 async fn the_fingerprint_window_is_bounded() {
     let fixture = Fixture::new();
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    let habituation = Habituation::new(&fixture.docs).unwrap();
+    let habituation = Habituation::new(&fixture.docs);
     let mut config = HabituationConfig::default();
     config.window = 1;
     let a = event("s", "1", "c").text("alpha beta gamma");

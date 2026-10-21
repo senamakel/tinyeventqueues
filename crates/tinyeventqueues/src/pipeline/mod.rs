@@ -18,11 +18,11 @@ mod wake;
 
 use std::sync::{Arc, RwLock};
 
+use crate::config::QueueManifest;
+use crate::ports::{Clock, DocumentStore, QueueStore};
 use tinyeventqueues_bus::{
     DeadItem, DrainReport, InboundEvent, IngestResponse, PipelineConfig, QueueDepth, StatsResponse,
 };
-use tinystoragedrivers_core::queue::{QueueManifest, QueueStore};
-use tinystoragedrivers_core::{Clock, DocumentStore};
 
 use crate::Result;
 use crate::cadence::Scheduler;

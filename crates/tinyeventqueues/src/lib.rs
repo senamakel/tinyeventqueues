@@ -18,8 +18,9 @@
 //!
 //! The pipeline runs over the storage ports of `tinystoragedrivers`: an
 //! `Arc<dyn QueueStore>` for work and an `Arc<dyn DocumentStore>` for state,
-//! so it runs on memory, `SQLite`, file, `MongoDB` or a broker. Time comes from
-//! an injectable [`Clock`], so tests drive it with a [`ManualClock`].
+//! so a host can provide memory, `SQLite`, file, `MongoDB` or broker engines.
+//! Time comes from an injectable [`Clock`], so tests drive it with a
+//! [`ManualClock`].
 //!
 //! # Configuration
 //!
@@ -34,12 +35,14 @@
 //! # tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
 //! use std::sync::Arc;
 //! use tinyeventqueues::{Disposition, EventKind, InboundEvent, Pipeline, Sender};
-//! use tinystoragedrivers_core::queue::DocumentQueue;
-//! use tinystoragedrivers_core::{MemoryStorage, Scope, StorageBackend};
+//! use tinystoragedrivers_testkit::memory_storage;
+//! use tinystoragedrivers_types::Scope;
 //!
-//! let storage = MemoryStorage::new().for_scope(&Scope::local())?;
-//! let queues = Arc::new(DocumentQueue::new(storage.documents()));
-//! let pipeline = Pipeline::builder(queues, Arc::clone(storage.documents())).build().await?;
+//! let storage = memory_storage(&Scope::new("example")?);
+//! let pipeline = Pipeline::builder(
+//!     Arc::clone(storage.queues()),
+//!     Arc::clone(storage.documents()),
+//! ).build().await?;
 //!
 //! let event = InboundEvent::new(
 //!     "channel:telegram", "1001", "chat-42", Sender::new("user-7"), EventKind::Message, 0,
@@ -64,6 +67,7 @@ pub mod host;
 pub mod ingress;
 pub mod observe;
 mod pipeline;
+mod ports;
 pub mod salience;
 mod store;
 mod tinybus_module;

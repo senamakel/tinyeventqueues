@@ -3,39 +3,32 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
-use tinystoragedrivers_core::schema::{Item, Registry};
 
 #[test]
-fn every_collection_is_module_scoped_under_the_owner() {
-    let schema = storage_schema();
-    assert_eq!(schema.owner.as_str(), OWNER);
-    assert_eq!(schema.items.len(), collection_specs().len());
-    for item in &schema.items {
-        assert_eq!(item.scope(), ScopeClass::Module);
-        assert!(item.name().starts_with("teq."), "{}", item.name());
+fn collection_specs_are_pure_owner_declarations() {
+    let specs = collection_specs();
+    assert_eq!(specs.len(), 12);
+    let mut names = std::collections::HashSet::new();
+    for spec in &specs {
+        assert!(spec.name.starts_with("teq."), "{}", spec.name);
+        assert!(
+            names.insert(&spec.name),
+            "duplicate collection {}",
+            spec.name
+        );
     }
+    assert_eq!(specs[0].name, OUTCOMES);
+    assert_eq!(specs[0].indexes[0].fields, ["disposition"]);
+    assert_eq!(specs[0].indexes[1].fields, ["expires_ms"]);
+    assert_eq!(specs.last().unwrap().name, COALESCE);
 }
 
 #[test]
-fn declared_specs_are_the_specs_the_module_ensures() {
-    let declared: Vec<CollectionSpec> = storage_schema()
-        .items
-        .into_iter()
-        .filter_map(|item| match item {
-            Item::Collection { spec, version, .. } => {
-                assert_eq!(version, COLLECTION_VERSION);
-                Some(spec)
-            }
-            _ => None,
-        })
-        .collect();
-    assert_eq!(declared, collection_specs());
-}
-
-#[test]
-fn the_schema_composes_alone() {
-    let registry = Registry::compose(vec![storage_schema()]);
-    assert!(registry.is_ok(), "{:?}", registry.err());
+fn host_can_compose_collection_specs_with_its_other_storage() {
+    let mut all = collection_specs();
+    all.push(CollectionSpec::new("host.preferences"));
+    let mut names = std::collections::HashSet::new();
+    assert!(all.iter().all(|spec| names.insert(spec.name.as_str())));
 }
 
 #[test]

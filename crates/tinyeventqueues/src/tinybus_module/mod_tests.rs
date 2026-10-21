@@ -14,17 +14,20 @@ use tinyeventqueues_bus::{
     InboundEvent, IngestRequest, IngestResponse, ListDeadRequest, ListDeadResponse, RedriveRequest,
     RedriveResponse, Sender, StatsRequest, StatsResponse, names,
 };
+use tinystoragedrivers_api::StorageBackend;
+use tinystoragedrivers_busproxy::StorageServer;
 use tinystoragedrivers_busproxy::{PerCallerEndpoint, ServedStorage, serve};
-use tinystoragedrivers_client::StorageServer;
-use tinystoragedrivers_core::{MemoryStorage, Scope, ScopedStorage, StorageBackend};
+#[cfg(all(target_os = "linux", not(feature = "static-link")))]
+use tinystoragedrivers_busproxy::{prepare_storage_host_callbacks, serve_with_host_callbacks};
+use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::Scope;
 
 use super::host::BusHost;
 use super::settings::Settings;
 use super::storage::Backing;
 use super::ticker::{Slot, Wake};
-use super::{EventQueuesService, pipeline, setup, setup_factory};
+use super::{EventQueuesService, pipeline, setup_factory, setup_with_test_backing};
 use crate::Host;
-use crate::config::shipped_manifest;
 
 /// A module configuration with the pass timer off, so a test's `Drain` is
 /// the only thing that runs passes.
@@ -42,25 +45,23 @@ pub(crate) struct Instance {
 pub(crate) struct Rig {
     pub(crate) bus: MemoryBus,
     pub(crate) host: Connection,
-    pub(crate) backend: MemoryStorage,
+    pub(crate) backend: Arc<MemoryBackend>,
     _served: Option<ServedStorage>,
 }
 
-/// A bus whose host serves storage (with the shipped queue manifest) when
-/// `serve_storage`, the way a storage-hosting process does.
+/// A bus whose host serves a memory-backed test storage bundle when requested.
 pub(crate) async fn rig(serve_storage: bool) -> Rig {
     let bus = MemoryBus::new();
     Broker::new().spawn(bus.clone());
-    let backend = MemoryStorage::new();
+    let backend = Arc::new(MemoryBackend::new());
     let host = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
     let served = if serve_storage {
-        let bound = backend.clone();
-        let manifest = Arc::new(shipped_manifest().unwrap());
+        let bound = Arc::clone(&backend);
         let endpoint = PerCallerEndpoint::new(move |_sender| {
-            let scoped: ScopedStorage = bound.for_scope(&Scope::local()).ok()?;
-            Some(StorageServer::new(scoped).with_queue_manifest(Arc::clone(&manifest)))
+            let storage = bound.for_scope(&Scope::new("local").ok()?).ok()?;
+            Some(StorageServer::new(storage))
         });
         Some(serve(&host, Arc::new(endpoint)).await.unwrap())
     } else {
@@ -75,6 +76,14 @@ pub(crate) async fn rig(serve_storage: bool) -> Rig {
 }
 
 impl Rig {
+    fn test_backing(&self) -> Backing {
+        let storage = self
+            .backend
+            .for_scope(&Scope::new("local").unwrap())
+            .unwrap();
+        Backing::of(&storage)
+    }
+
     /// Set a module instance up on a fresh connection with `config`, and a
     /// proxy to it from the host connection. The returned instance (its
     /// connection and timer slot) must outlive the calls.
@@ -83,9 +92,14 @@ impl Rig {
             .await
             .unwrap();
         let slot = Slot::default();
-        setup(connection.clone(), config, slot.clone())
-            .await
-            .unwrap();
+        setup_with_test_backing(
+            connection.clone(),
+            config,
+            slot.clone(),
+            self.test_backing(),
+        )
+        .await
+        .unwrap();
         let proxy = self
             .host
             .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
@@ -98,9 +112,15 @@ impl Rig {
 async fn declared_methods_match_the_dispatch_table() {
     let settings = Settings::default();
     let service = EventQueuesService {
-        pipeline: pipeline(Backing::memory().unwrap(), &settings, None)
-            .await
-            .unwrap(),
+        pipeline: pipeline(
+            Backing::of(&tinystoragedrivers_testkit::memory_storage(
+                &Scope::new("test-module").unwrap(),
+            )),
+            &settings,
+            None,
+        )
+        .await
+        .unwrap(),
         wake: Wake::default(),
     };
     let methods = service
@@ -113,7 +133,7 @@ async fn declared_methods_match_the_dispatch_table() {
 }
 
 async fn proxy() -> (Proxy, Instance, Rig) {
-    let rig = rig(false).await;
+    let rig = rig(true).await;
     let (proxy, module) = rig.module(manual()).await;
     (proxy, module, rig)
 }
@@ -244,11 +264,9 @@ fn the_host_interface_matches_the_contract() {
 
 #[tokio::test]
 async fn turns_are_delivered_to_the_host_over_the_bus() {
-    let bus = MemoryBus::new();
-    Broker::new().spawn(bus.clone());
-    let host_side = Connection::connect(bus.connect().await.unwrap())
-        .await
-        .unwrap();
+    let rig = rig(true).await;
+    let bus = rig.bus.clone();
+    let host_side = rig.host.clone();
     let host = FakeHost::default();
     host_side
         .serve_at(names::host::OBJECT_PATH.try_into().unwrap(), host.clone())
@@ -261,9 +279,14 @@ async fn turns_are_delivered_to_the_host_over_the_bus() {
     let service = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
-    setup(service.clone(), manual(), Slot::default())
-        .await
-        .unwrap();
+    setup_with_test_backing(
+        service.clone(),
+        manual(),
+        Slot::default(),
+        rig.test_backing(),
+    )
+    .await
+    .unwrap();
     let proxy = host_side
         .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
         .unwrap();
@@ -312,46 +335,52 @@ async fn an_absent_host_makes_delivery_back_off() {
 }
 
 #[tokio::test]
-async fn the_setup_factory_sets_an_instance_up() {
-    let rig = rig(false).await;
+async fn the_setup_factory_refuses_a_missing_storage_callback() {
+    let rig = rig(true).await;
     let connection = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
     let setup = setup_factory();
-    setup(connection, manual()).await.unwrap();
-    let proxy = rig
-        .host
-        .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
-        .unwrap();
-    let stats: StatsResponse = proxy
-        .call(names::methods::STATS, (StatsRequest::new(),))
-        .await
-        .unwrap();
-    assert_eq!(stats.queues.len(), 6);
+    let error = setup(connection, manual()).await.unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("host callback destination is required")
+    );
 }
 
 #[tokio::test]
 async fn a_malformed_configuration_fails_setup() {
-    let rig = rig(false).await;
+    let rig = rig(true).await;
     let module = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
-    let refused = setup(module, json!({ "timer": { "bogus": 1 } }), Slot::default()).await;
+    let refused = setup_with_test_backing(
+        module,
+        json!({ "timer": { "bogus": 1 } }),
+        Slot::default(),
+        rig.test_backing(),
+    )
+    .await;
     assert!(refused.unwrap_err().to_string().contains("timer"));
 }
 
 #[tokio::test]
 async fn a_configuration_that_names_a_missing_queue_fails_setup() {
-    let rig = rig(false).await;
+    let rig = rig(true).await;
     let module = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
     let mut pipeline: Value = serde_json::from_str(crate::config::SHIPPED_PIPELINE_JSON).unwrap();
     pipeline["dead_letter"]["queue"] = json!("teq.nowhere");
-    let refused = setup(
+    let refused = setup_with_test_backing(
         module,
-        json!({ "pipeline": pipeline, "timer": { "enabled": false } }),
+        json!({
+            "pipeline": pipeline,
+            "timer": { "enabled": false },
+        }),
         Slot::default(),
+        rig.test_backing(),
     )
     .await;
     assert!(refused.unwrap_err().to_string().contains("teq.nowhere"));
@@ -381,7 +410,10 @@ async fn a_pipeline_on_host_storage_survives_a_module_restart() {
     first_instance.connection.close().await.unwrap();
 
     // The queued event and the module's state are on the host's backend.
-    let scoped = rig.backend.for_scope(&Scope::local()).unwrap();
+    let scoped = rig
+        .backend
+        .for_scope(&Scope::new("local").unwrap())
+        .unwrap();
     let ingress = scoped.queues().stats("teq.ingress").await.unwrap();
     assert_eq!(ingress.ready, 1);
 
@@ -409,7 +441,9 @@ async fn the_module_timer_delivers_without_a_drain() {
         .unwrap();
     rig.host.request_name(names::host::INTERFACE).await.unwrap();
     let (proxy, instance) = rig
-        .module(json!({ "timer": { "min_interval_ms": 5, "max_interval_ms": 50 } }))
+        .module(json!({
+            "timer": { "min_interval_ms": 5, "max_interval_ms": 50 },
+        }))
         .await;
     assert!(instance.slot.running());
 
@@ -438,12 +472,13 @@ async fn the_module_timer_delivers_without_a_drain() {
     assert_eq!(host.turns.lock().unwrap()[0].events[0].event_id, "1");
 }
 
-/// The `static-link` entry points load through the real module host, the way
-/// a host's `linked` module source attaches the module.
+/// A statically linked module without an admitted storage callback fails
+/// closed instead of borrowing the process-global storage service.
 #[cfg(feature = "static-link")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_linked_module_attaches_and_serves_over_the_bus() {
+async fn the_linked_module_without_a_storage_callback_fails_closed() {
     use tinybus::module::ModuleHost;
+    use tinybus::module::ModuleState;
 
     let linked = crate::linked_module().unwrap();
     assert_eq!(linked.manifest.module.name, "tinyeventqueues");
@@ -458,23 +493,129 @@ async fn the_linked_module_attaches_and_serves_over_the_bus() {
     let client = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(10), async {
+    let state = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let names = client.list_names().await.unwrap();
-            if names.iter().any(|name| name.as_str() == names::INTERFACE) {
-                break;
+            if let Some(info) = module_host
+                .list()
+                .into_iter()
+                .find(|info| info.name == "tinyeventqueues")
+            {
+                match &info.state {
+                    ModuleState::Failed { .. } | ModuleState::Faulted { .. } => {
+                        break info.state;
+                    }
+                    _ => {}
+                }
             }
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await
-    .expect("the linked module claimed its name");
+    .expect("the linked module reaches a terminal setup failure");
+    assert!(matches!(
+        state,
+        ModuleState::Failed { .. } | ModuleState::Faulted { .. }
+    ));
+    assert!(
+        client
+            .list_names()
+            .await
+            .unwrap()
+            .iter()
+            .all(|name| name.as_str() != names::INTERFACE)
+    );
+}
+
+/// The shipped cdylib uses the unique host callback destination admitted by
+/// TinyBus and reads/writes the host's storage bundle through that binding.
+#[cfg(all(target_os = "linux", not(feature = "static-link")))]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_loaded_module_uses_only_its_admitted_host_storage_callback() {
+    let source = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("libtinyeventqueues.so");
+    assert!(
+        source.is_file(),
+        "test cdylib is missing: {}",
+        source.display()
+    );
+    let dir = std::env::current_dir()
+        .unwrap()
+        .join("target")
+        .join(format!("callback-module-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let artifact = dir.join("libtinyeventqueues.so");
+    std::fs::copy(&source, &artifact).unwrap();
+    let hash = tinybus::module::sha256_file(&artifact).unwrap();
+    std::fs::write(
+        dir.join("modules.toml"),
+        format!("\"libtinyeventqueues.so\" = \"{hash}\"\n"),
+    )
+    .unwrap();
+
+    let bus = MemoryBus::new();
+    let broker = Broker::new();
+    let _broker_task = broker.clone().spawn(bus.clone());
+    let modules = tinybus::module::ModuleHost::new(broker);
+    let binding = prepare_storage_host_callbacks(&modules).await.unwrap();
+    let backend = Arc::new(MemoryBackend::new());
+    let bound = Arc::clone(&backend);
+    let endpoint = PerCallerEndpoint::new(move |_sender| {
+        let storage = bound.for_scope(&Scope::new("local").ok()?).ok()?;
+        Some(StorageServer::new(storage))
+    });
+    let _served = serve_with_host_callbacks(binding.clone(), Arc::new(endpoint))
+        .await
+        .unwrap();
+
+    modules
+        .load_file_with_host_callbacks(
+            &artifact,
+            json!({
+                "storage_callback": binding.unique_name(),
+                "timer": { "enabled": false }
+            }),
+            &binding,
+        )
+        .await
+        .unwrap();
+    let client = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
     let proxy = client
         .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
         .unwrap();
+    let event = InboundEvent::new(
+        "callback-test",
+        "stored",
+        "conversation",
+        Sender::new("user"),
+        EventKind::Message,
+        1,
+    );
+    let response: IngestResponse = proxy
+        .call(names::methods::INGEST, (IngestRequest::new(vec![event]),))
+        .await
+        .unwrap();
+    assert_eq!(response.results[0].disposition, Disposition::Accepted);
     let stats: StatsResponse = proxy
         .call(names::methods::STATS, (StatsRequest::new(),))
         .await
         .unwrap();
-    assert_eq!(stats.queues.len(), 6);
+    assert_eq!(stats.queues.iter().map(|queue| queue.ready).sum::<u64>(), 1);
+
+    let outsider = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    assert!(
+        tinystoragedrivers_busproxy::connect_storage_at(outsider, binding.unique_name().clone(),)
+            .await
+            .is_err()
+    );
+    std::fs::remove_dir_all(dir).unwrap();
 }

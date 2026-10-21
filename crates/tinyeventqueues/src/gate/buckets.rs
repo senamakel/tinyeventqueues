@@ -2,12 +2,13 @@
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, key_of};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{BotLoopConfig, InboundEvent, RateLimit};
-use tinystoragedrivers_core::{DocumentStore, Key, Repo};
 
 use crate::Result;
 use crate::store::BUCKETS;
+use crate::store::Repo;
 
 /// One token, in the milli-tokens buckets count in.
 const TOKEN: u64 = 1_000;
@@ -42,11 +43,11 @@ pub(super) struct Buckets {
 }
 
 impl Buckets {
-    pub(super) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            buckets: Repo::new(docs, BUCKETS)?,
-            windows: Repo::new(docs, BUCKETS)?,
-        })
+    pub(super) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            buckets: Repo::new(docs, BUCKETS),
+            windows: Repo::new(docs, BUCKETS),
+        }
     }
 
     /// Take one token from the `scope` bucket of `key` within `source`.
@@ -59,7 +60,7 @@ impl Buckets {
         limit: RateLimit,
         now: u64,
     ) -> Result<bool> {
-        let id = Key::of(["bucket", scope, source, key])?;
+        let id = key_of(&["bucket", scope, source, key])?;
         let mut granted = false;
         self.buckets
             .update(id.as_str(), |current| {
@@ -88,7 +89,7 @@ impl Buckets {
         config: &BotLoopConfig,
         now: u64,
     ) -> Result<bool> {
-        let id = Key::of([
+        let id = key_of(&[
             "botloop",
             event.source.as_str(),
             event.conversation_key.as_str(),

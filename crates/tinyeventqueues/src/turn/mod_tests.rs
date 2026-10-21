@@ -51,7 +51,7 @@ async fn enqueueing_a_turn_twice_stores_it_once_in_its_conversation_group() {
     let lanes = Lanes::new(
         Arc::clone(&fixture.queues),
         crate::store::Tombstones::new(Arc::clone(&fixture.docs)),
-        Conversations::new(&fixture.docs).unwrap(),
+        Conversations::new(&fixture.docs),
     );
     let turn = PendingTurn::new(
         Lane::Actionable,
@@ -82,7 +82,7 @@ async fn an_empty_turn_has_no_group() {
     let lanes = Lanes::new(
         Arc::clone(&fixture.queues),
         crate::store::Tombstones::new(Arc::clone(&fixture.docs)),
-        Conversations::new(&fixture.docs).unwrap(),
+        Conversations::new(&fixture.docs),
     );
     let turn = PendingTurn::new(Lane::Digest, Reason::LaneOverflow, vec![], vec![], 0).unwrap();
     assert!(lanes.enqueue(&queue, &turn, 0, 1_000).await.unwrap());
@@ -102,7 +102,7 @@ async fn without_dedupe_or_groups_a_turn_is_stored_once_and_ungrouped() {
     let lanes = Lanes::new(
         Arc::clone(&fixture.queues),
         crate::store::Tombstones::new(Arc::clone(&fixture.docs)),
-        Conversations::new(&fixture.docs).unwrap(),
+        Conversations::new(&fixture.docs),
     );
     let turn = PendingTurn::new(
         Lane::Actionable,
@@ -127,7 +127,7 @@ async fn without_dedupe_or_groups_a_turn_is_stored_once_and_ungrouped() {
 async fn conversation_order_without_groups() {
     let fixture = Fixture::new();
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    let conversations = Conversations::new(&fixture.docs).unwrap();
+    let conversations = Conversations::new(&fixture.docs);
     assert_eq!(conversations.assign("c").await.unwrap(), 1);
     assert_eq!(conversations.assign("c").await.unwrap(), 2);
     assert_eq!(

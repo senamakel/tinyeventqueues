@@ -9,7 +9,7 @@ use crate::test_support::{Fixture, event};
 
 async fn threads(fixture: &Fixture) -> Threads {
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    Threads::new(&fixture.docs).unwrap()
+    Threads::new(&fixture.docs)
 }
 
 fn turn(lane: Lane, id: &str) -> PendingTurn {
