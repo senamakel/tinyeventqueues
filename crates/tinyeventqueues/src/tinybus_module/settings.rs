@@ -15,10 +15,14 @@
 //! document, both parsed as strictly as the files are. A host that serves the
 //! module's queues should declare the same manifest it passes here: its queue
 //! port admits an `EnsureQueue` only for the spec it declared.
+//!
+//! `storage_descriptor`, when present, is an opaque host-issued TSD lease. Its
+//! route and scope are enforced by the storage host, not interpreted here.
 
 use serde::Deserialize;
 use serde_json::Value;
 use tinyeventqueues_bus::PipelineConfig;
+use tinystoragedrivers_busproxy::StorageDescriptor;
 use tinystoragedrivers_core::queue::QueueManifest;
 
 use crate::config::{
@@ -30,6 +34,10 @@ use crate::{Error, Result};
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Settings {
+    /// Opaque host-issued scope and route for this module instance's storage lease.
+    /// It is passed to the storage opener without interpreting its fields.
+    #[serde(default)]
+    pub(super) storage_descriptor: Option<StorageDescriptor>,
     /// A `queues.json` document; the shipped one when absent.
     #[serde(default)]
     queues: Option<Value>,

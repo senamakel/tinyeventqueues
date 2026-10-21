@@ -11,6 +11,7 @@ use crate::config::{SHIPPED_PIPELINE_JSON, SHIPPED_QUEUES_JSON};
 fn null_and_an_empty_object_run_the_shipped_files() {
     for blob in [Value::Null, json!({})] {
         let settings = Settings::parse(blob).unwrap();
+        assert!(settings.storage_descriptor.is_none());
         assert_eq!(settings.timer, TimerSettings::default());
         assert_eq!(settings.manifest().unwrap(), shipped_manifest().unwrap());
         assert_eq!(
@@ -42,8 +43,26 @@ fn supplied_documents_replace_the_shipped_ones() {
 fn an_unknown_field_is_named() {
     let error = Settings::parse(json!({ "timers": {} })).unwrap_err();
     assert!(error.to_string().contains("timers"), "{error}");
+    let error = Settings::parse(json!({ "storage_descriptors": {} })).unwrap_err();
+    assert!(error.to_string().contains("storage_descriptors"), "{error}");
     let error = Settings::parse(json!({ "timer": { "every": 1 } })).unwrap_err();
     assert!(error.to_string().contains("every"), "{error}");
+}
+
+#[test]
+fn a_host_storage_descriptor_is_accepted_as_opaque_configuration() {
+    let descriptor = json!({
+        "service_peer": ":1.23",
+        "registration_id": 7,
+        "object_root": "/ai/tinyhumans/tinystorage/Leases/7",
+    });
+    let settings = Settings::parse(json!({ "storage_descriptor": descriptor })).unwrap();
+    let descriptor = settings.storage_descriptor.expect("descriptor is retained");
+    assert_eq!(descriptor.service_peer(), ":1.23");
+    assert_eq!(
+        descriptor.object_root(),
+        "/ai/tinyhumans/tinystorage/Leases/7"
+    );
 }
 
 #[test]

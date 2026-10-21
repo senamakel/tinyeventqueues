@@ -32,13 +32,13 @@ tinyeventqueues-bus = { path = "crates/tinyeventqueues-bus" }
 # TinyBus defines the message types, interface macro, and frozen module ABI
 # used by the generated integration. Socket and CLI features are unnecessary
 # here.
- tinybus = { version = ">=0.3.11, <0.4", default-features = false, features = [
+tinybus = { version = "=0.3.12", default-features = false, features = [
     "macros",
     "modules",
 ] }
 # The module-side SDK owns the isolated runtime and exports the ABI entrypoints
 # required by TinyBus's dynamic loader.
-tinybus-module = ">=0.3.11, <0.4"
+tinybus-module = "=0.3.12"
 # Derive macros for the crate-wide error type in
 # `crates/tinyeventqueues/src/error/`.
 thiserror = "2"
@@ -50,16 +50,20 @@ serde_json = "1"
 # the queue every document driver gets), `QueueManifest`, `DocumentStore`, the
 # injectable `Clock`, and `MemoryStorage` for tests.
 #
-# Pinned to the tinyhumansai main revision that merged the queue port
-# (tinyhumansai/tinystoragedrivers#71, #72, #73).
-tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "a04e3a174fa8f28d5229a816ca6b39c72a9efd7b" }
+# Pinned to the released tinyhumansai/tinystoragedrivers v1.10.0 queue-grant
+# API, which lets the host admit only manifest-declared queue operations.
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "078d2dee0f299d97dbc22fa7210bd64098a4bf59" }
 # The module side of the storage bus: `connect_storage` reaches the host's
 # `Storage` objects (documents and queues) for the one scope the host bound
 # this module to. Same pin as the core crate.
-tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "a04e3a174fa8f28d5229a816ca6b39c72a9efd7b" }
-# Test-only: serves the storage objects on an in-memory broker so the module's
-# storage path is exercised over the real bus.
-tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "a04e3a174fa8f28d5229a816ca6b39c72a9efd7b" }
+tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "078d2dee0f299d97dbc22fa7210bd64098a4bf59" }
+# Test-only: derives the exact governed document grant from lease fixtures.
+tinystoragedrivers-bus = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "078d2dee0f299d97dbc22fa7210bd64098a4bf59" }
+# Test-only: issues real governed storage leases to linked module fixtures.
+tinystoragedrivers-tinybus = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "078d2dee0f299d97dbc22fa7210bd64098a4bf59" }
+# The module composes the bound transport with the shared storage client; tests
+# also serve storage objects over an in-memory broker.
+tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "078d2dee0f299d97dbc22fa7210bd64098a4bf59" }
 # Module diagnostics; the host installs the logger.
 log = "0.4"
 # The host-callback trait (`Host`) is an async trait object.
@@ -108,11 +112,18 @@ private_intra_doc_links = "warn"
 # the graph holds exactly one `tinybus`.
 [patch.crates-io]
 tinybus = { path = "vendor/tinybus/crates/tinybus" }
-tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
 tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
 
 [patch."https://github.com/tinyhumansai/tinybus"]
 tinybus = { path = "vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
+
+[patch."https://github.com/tinyhumansai/tinybus?rev=6b3c5b0cc14b1d07b68055b17a937b11de613efd"]
+tinybus = { path = "vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }
 
 [profile.release]
 # Cross-crate optimization and smaller, faster binaries for release builds.
