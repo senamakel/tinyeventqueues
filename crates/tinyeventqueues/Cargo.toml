@@ -32,6 +32,8 @@ tinybus-module = { workspace = true }
 thiserror = { workspace = true }
 # The loaded module reaches the host's storage over the storage bus.
 tinystoragedrivers-busproxy = { workspace = true }
+# The module opens the bound bus transport as the shared scoped storage client.
+tinystoragedrivers-client = { workspace = true }
 # The module-owned pass timer and its wake-up signal.
 tokio = { workspace = true }
 log = { workspace = true }
@@ -48,7 +50,8 @@ async-trait = { workspace = true }
 serde_json = { workspace = true }
 # Tests serve the storage objects on the in-memory broker the module connects
 # to, and use the broker test support.
-tinystoragedrivers-client = { workspace = true }
+tinystoragedrivers-bus = { workspace = true }
+tinystoragedrivers-tinybus = { workspace = true }
 tinybus = { workspace = true, features = ["test-support"] }
 
 [features]

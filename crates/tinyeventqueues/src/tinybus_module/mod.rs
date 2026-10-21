@@ -9,9 +9,9 @@
 //!   manifest declares, in the one scope the host bound this module to. A host
 //!   that serves no storage leaves the module on memory, logged as an error.
 //! * **Configuration** ([`settings`]): the host's private configuration blob
-//!   may carry a `queues.json` and a `pipeline.json` document and the timer
-//!   bounds; absent, the shipped files run. The manifest is applied through
-//!   the queue port at setup.
+//!   may carry an opaque host-issued storage lease, a `queues.json` and a
+//!   `pipeline.json` document, and timer bounds; absent, the shipped files run.
+//!   The manifest is applied through the queue port at setup.
 //! * **Host callbacks** ([`host`]): `ClassifySalience` and `Deliver` on the
 //!   host's optional `ai.tinyhumans.tinyeventqueues.Host` interface.
 //! * **Passes** ([`ticker`]): the module runs passes on its own timer, waking
@@ -129,7 +129,7 @@ fn setup_factory() -> impl Fn(Connection, serde_json::Value) -> SetupFuture + Cl
 
 async fn setup(connection: Connection, config: serde_json::Value, slot: Slot) -> TinyBusResult<()> {
     let settings = Settings::parse(config).map_err(|error| failed(&error))?;
-    let backing = storage::open(connection.clone())
+    let backing = storage::open(connection.clone(), settings.storage_descriptor.clone())
         .await
         .map_err(|error| failed(&error))?;
     let durable = backing.durable;
