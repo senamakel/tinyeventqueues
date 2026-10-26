@@ -4,7 +4,7 @@
 //! failure mode is a distinct [`Error`] variant. Callers match on variants;
 //! message text is not a stable API.
 
-use tinystoragedrivers_core::StorageError;
+use crate::ports::StorageError;
 
 /// Errors returned by this crate.
 #[derive(Debug, thiserror::Error)]
@@ -50,6 +50,9 @@ pub enum Error {
 }
 
 impl Error {
+    pub(crate) fn manifest(message: impl Into<String>) -> Self {
+        Self::Manifest(StorageError::invalid_input(message))
+    }
     /// A configuration error at `field`.
     pub(crate) fn config(field: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Config {

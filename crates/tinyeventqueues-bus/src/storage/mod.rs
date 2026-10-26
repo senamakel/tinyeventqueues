@@ -1,29 +1,17 @@
 //! What the module stores, as a schema a host composes.
 //!
-//! The pipeline keeps its state in `teq.*` document collections, one scope per
-//! tenant: the module runs for one tenant at a time, so every collection is at
-//! [`ScopeClass::Module`]. A host composes [`storage_schema`] into its schema
-//! registry and derives the module's storage grant from it, so the grant never
-//! spells the collections (or their indexes) out a second time.
+//! The pipeline keeps its state in `teq.*` document collections. Hosts compose
+//! [`collection_specs`] with their own storage declarations.
 //!
 //! The queues themselves are not collections of this owner. They are declared
 //! in `queues.json` (a `tinystoragedrivers` `QueueManifest`, shipped as
 //! [`SHIPPED_QUEUES_JSON`]) and served by the host's queue port, whose own
 //! bookkeeping lives under the reserved `tsd.` owner.
 //!
-//! [`collection_specs`] is what the module ensures at startup; the host only
-//! admits an `EnsureCollection` whose spec equals the declared one, so both
-//! sides read the specs from here.
+//! [`collection_specs`] is the complete, pure collection declaration used by
+//! both the host and this module.
 
-use tinystoragedrivers_core::schema::{Owner, Schema, ScopeClass};
-use tinystoragedrivers_core::{CollectionSpec, IndexSpec};
-
-/// The schema owner, and the prefix of every collection name.
-pub const OWNER: &str = "teq";
-
-/// The version every collection is declared at. Bump a collection's version
-/// (and add a step) when its stored shape changes.
-pub const COLLECTION_VERSION: u32 = 1;
+use tinystoragedrivers_types::{CollectionSpec, IndexSpec};
 
 /// Terminal outcomes, one per event.
 pub const OUTCOMES: &str = "teq.outcomes";
@@ -80,26 +68,6 @@ pub fn collection_specs() -> Vec<CollectionSpec> {
             .index(IndexSpec::new("by_due", ["due_ms"]))
             .index(IndexSpec::new("by_thread", ["thread_group"])),
     ]
-}
-
-/// Everything the module stores, for the host's `Registry::compose`.
-///
-/// # Panics
-///
-/// Never in practice: the owner name is a constant that satisfies the owner
-/// grammar, which the tests pin.
-#[must_use]
-pub fn storage_schema() -> Schema {
-    #[allow(
-        clippy::expect_used,
-        reason = "`Owner::new` is fallible only for a malformed name; `teq` is a constant the tests pin"
-    )]
-    let owner = Owner::new(OWNER).expect("`teq` is a valid schema owner");
-    collection_specs()
-        .into_iter()
-        .fold(Schema::new(owner), |schema, spec| {
-            schema.collection_with(COLLECTION_VERSION, spec, ScopeClass::Module)
-        })
 }
 
 #[cfg(test)]

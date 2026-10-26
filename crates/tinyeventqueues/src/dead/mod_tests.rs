@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use crate::ports::NewMessage;
 use serde_json::json;
 use tinyeventqueues_bus::{Disposition, EventRef};
-use tinystoragedrivers_core::queue::NewMessage;
 
 use super::*;
 use crate::store::Ledger;

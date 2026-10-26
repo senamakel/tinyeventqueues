@@ -53,6 +53,12 @@ jobs:
       - name: Test
         run: cargo test --all-features
 
+      # The all-features build enables `static-link`, which intentionally
+      # omits the dynamic module ABI symbols. Restore the default cdylib before
+      # the default test suite loads the module from disk.
+      - name: Build the default dynamic module
+        run: cargo build --workspace
+
       - name: Test default features
         run: cargo test
 
@@ -84,6 +90,12 @@ jobs:
             echo "of transports, async runtimes, HTTP clients and native libraries." >&2
             exit 1
           fi
+
+      # Every library target and feature mode must stay free of concrete
+      # storage engines. The bus contract has a separate, stricter transport
+      # boundary above.
+      - name: Assert libraries stay engine-free
+        run: python3 .github/scripts/check-library-engines.py
 
       - name: Require 90% line coverage in every source file
         run: .github/scripts/check-file-coverage.sh 90 coverage.json

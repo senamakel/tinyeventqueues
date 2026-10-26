@@ -1,56 +1,62 @@
-//! Tests for opening the module's storage: the host's over the bus, and the
-//! memory fallback.
+//! Tests for the module's host-backed TSD v2 storage routes.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use tinyeventqueues_bus::storage::OUTCOMES;
-use tinystoragedrivers_core::{Precondition, Scope, StorageBackend};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use tinybus::Connection;
+use tinybus::broker::Broker;
+use tinybus::transport::memory::MemoryBus;
+use tinyeventqueues_bus::storage::{OUTCOMES, collection_specs};
+use tinystoragedrivers_api::StorageBackend;
+use tinystoragedrivers_busproxy::{
+    PerCallerEndpoint, StorageAddress, StorageServer, connect_storage_at_address, serve_at_address,
+};
+use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::{Precondition, Scope};
 
 use super::*;
 use crate::tinybus_module::tests::rig;
-use tinybus::{Connection, broker::Broker, transport::memory::MemoryBus};
-
-#[path = "storage_bound_tests.rs"]
-mod bound_tests;
 
 #[tokio::test]
-async fn a_host_that_serves_storage_backs_the_pipeline() {
+async fn the_default_route_uses_the_host_scoped_storage_ports() {
     let rig = rig(true).await;
     let module = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
     let backing = open(module, None).await.unwrap();
-    assert!(backing.durable);
-    assert!(format!("{backing:?}").contains("durable: true"));
 
-    // A write through the module lands in the host's backend.
-    for spec in tinyeventqueues_bus::storage::collection_specs() {
+    for spec in collection_specs() {
         backing.docs.ensure_collection(&spec).await.unwrap();
     }
     backing
         .docs
-        .put(OUTCOMES, "x", serde_json::json!({}), Precondition::None)
+        .put(
+            OUTCOMES,
+            "x",
+            serde_json::json!({"stored": true}),
+            Precondition::None,
+        )
         .await
         .unwrap();
-    let host = rig.backend.for_scope(&Scope::local()).unwrap();
+    let host = rig
+        .backend
+        .for_scope(&Scope::new("local").unwrap())
+        .unwrap();
     assert!(host.documents().get(OUTCOMES, "x").await.unwrap().is_some());
 }
 
 #[tokio::test]
-async fn a_host_without_storage_leaves_the_pipeline_on_memory() {
+async fn missing_or_unusable_global_storage_fails_setup() {
     let rig = rig(false).await;
     let module = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
-    let backing = open(module, None).await.unwrap();
-    assert!(!backing.durable);
-}
+    assert!(open(module, None).await.is_err());
 
-#[tokio::test]
-async fn a_storage_host_that_cannot_be_reached_fails_setup_instead_of_using_memory() {
-    let rig = rig(false).await;
-    // Something owns the storage name but serves no storage objects: a host
-    // whose storage is present but failing.
+    // A host name without the storage objects is unavailable, not permission
+    // to acknowledge work in memory.
     rig.host
         .request_name(tinystoragedrivers_busproxy::HOST_NAME)
         .await
@@ -58,35 +64,100 @@ async fn a_storage_host_that_cannot_be_reached_fails_setup_instead_of_using_memo
     let module = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
-    let refused = open(module, None).await;
-    assert!(refused.is_err(), "fell back to memory: {refused:?}");
+    assert!(open(module, None).await.is_err());
 }
 
 #[tokio::test]
-async fn an_explicit_bound_descriptor_never_falls_back_when_its_route_is_unavailable() {
+async fn an_explicit_invocation_address_never_falls_back_to_global_storage() {
+    let rig = rig(true).await;
+    let module = Connection::connect(rig.bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let host = rig.host.unique_name().unwrap().clone();
+    let address = StorageAddress::try_new(
+        host,
+        format!(
+            "{}/missing",
+            tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT
+        )
+        .parse()
+        .unwrap(),
+    )
+    .unwrap();
+
+    assert!(open(module, Some(address)).await.is_err());
+}
+
+#[tokio::test]
+async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
     let bus = MemoryBus::new();
     Broker::new().spawn(bus.clone());
+    let host = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
     let module = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
+    let module_peer = module.unique_name().unwrap().clone();
+    let address = StorageAddress::try_new(
+        host.unique_name().unwrap().clone(),
+        format!(
+            "{}/event_queues_1",
+            tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT
+        )
+        .parse()
+        .unwrap(),
+    )
+    .unwrap();
+    let backend = Arc::new(MemoryBackend::new());
+    let scope = Scope::new("event-queues-bound").unwrap();
+    let admitted_calls = Arc::new(AtomicUsize::new(0));
+    let endpoint_backend = Arc::clone(&backend);
+    let endpoint_scope = scope.clone();
+    let endpoint_peer = module_peer.clone();
+    let endpoint_calls = Arc::clone(&admitted_calls);
+    let endpoint = PerCallerEndpoint::new(move |sender| {
+        if sender != &endpoint_peer {
+            return None;
+        }
+        endpoint_calls.fetch_add(1, Ordering::Relaxed);
+        let storage = endpoint_backend.for_scope(&endpoint_scope).ok()?;
+        Some(StorageServer::new(storage))
+    });
+    let served = serve_at_address(&host, address.clone(), Arc::new(endpoint))
+        .await
+        .unwrap();
+
+    let backing = open(module.clone(), Some(address.clone())).await.unwrap();
+    for spec in collection_specs() {
+        backing.docs.ensure_collection(&spec).await.unwrap();
+    }
+    backing
+        .docs
+        .put(
+            OUTCOMES,
+            "bound",
+            serde_json::json!({"stored": true}),
+            Precondition::None,
+        )
+        .await
+        .unwrap();
+    let scoped = backend.for_scope(&scope).unwrap();
     assert!(
-        module
-            .name_owner(tinystoragedrivers_busproxy::HOST_NAME)
+        scoped
+            .documents()
+            .get(OUTCOMES, "bound")
             .await
             .unwrap()
-            .is_none(),
-        "the fixture has no legacy well-known storage root"
+            .is_some()
     );
-    let descriptor = serde_json::from_value(serde_json::json!({
-        "service_peer": ":1.404",
-        "registration_id": 404,
-        "object_root": "/ai/tinyhumans/tinystorage/Leases/404",
-    }))
-    .unwrap();
 
-    let refused = open(module, Some(descriptor)).await;
-    assert!(
-        refused.is_err(),
-        "an explicit but unavailable lease must fail instead of using memory: {refused:?}"
-    );
+    let outsider = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    assert!(connect_storage_at_address(outsider, address).await.is_err());
+    assert!(admitted_calls.load(Ordering::Relaxed) > 0);
+
+    served.shutdown().await.unwrap();
+    assert!(backing.docs.get(OUTCOMES, "bound").await.is_err());
 }

@@ -6,12 +6,12 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::ports::NewMessage;
 use serde_json::json;
 use tinyeventqueues_bus::{
     AckPolicy, DeliverStatus, DispatchConfig, Disposition, EventRef, InboundEvent, Lane, Reason,
     SourcePolicy,
 };
-use tinystoragedrivers_core::queue::NewMessage;
 
 use super::backoff;
 use crate::config::shipped_pipeline_config;
@@ -288,7 +288,7 @@ async fn without_groups_a_lost_turn_is_skipped_after_the_gap_timeout() {
     let host = ScriptedHost::accepting();
     let pipeline = fixture.builder().host(host.clone()).build().await.unwrap();
     // A turn number handed out but never enqueued (a crash in between).
-    let conversations = crate::turn::Conversations::new(&fixture.docs).unwrap();
+    let conversations = crate::turn::Conversations::new(&fixture.docs);
     let lost = crate::turn::PendingTurn::new(
         Lane::Interactive,
         Reason::Turn,

@@ -3,12 +3,13 @@
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, Key, key_of};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{AmbientConfig, EventRef, InboundEvent};
-use tinystoragedrivers_core::{DocumentStore, Key, Repo};
 
 use crate::Result;
 use crate::store::AMBIENT;
+use crate::store::Repo;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 struct Buffer {
@@ -22,14 +23,14 @@ pub(crate) struct Ambient {
 }
 
 fn id(source: &str, conversation: &str) -> Result<Key> {
-    Ok(Key::of(["ambient", source, conversation])?)
+    Ok(key_of(&["ambient", source, conversation])?)
 }
 
 impl Ambient {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            repo: Repo::new(docs, AMBIENT)?,
-        })
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            repo: Repo::new(docs, AMBIENT),
+        }
     }
 
     /// Keep `event` for its conversation, evicting the oldest beyond

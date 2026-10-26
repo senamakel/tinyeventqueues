@@ -9,7 +9,7 @@ use crate::test_support::{Fixture, event};
 
 async fn digest(fixture: &Fixture) -> Digest {
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    Digest::new(&fixture.docs).unwrap()
+    Digest::new(&fixture.docs)
 }
 
 fn small() -> DigestConfig {

@@ -11,13 +11,13 @@
 use std::sync::Arc;
 
 use tinyeventqueues::{EventKind, InboundEvent, Pipeline, Sender};
-use tinystoragedrivers_core::queue::DocumentQueue;
-use tinystoragedrivers_core::{MemoryStorage, Scope, StorageBackend};
+use tinystoragedrivers_testkit::memory_storage;
+use tinystoragedrivers_types::Scope;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let storage = MemoryStorage::new().for_scope(&Scope::local())?;
-    let queues = Arc::new(DocumentQueue::new(storage.documents()));
+    let storage = memory_storage(&Scope::new("example")?);
+    let queues = Arc::clone(storage.queues());
     let pipeline = Pipeline::builder(queues, Arc::clone(storage.documents()))
         .build()
         .await?;

@@ -18,15 +18,16 @@ mod simhash;
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, key_of};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{
     EventKind, HabituationConfig, InboundEvent, Lane, SalienceClass, SalienceConfig,
     SalienceThresholds,
 };
-use tinystoragedrivers_core::{DocumentStore, Key, Repo};
 
 use crate::Result;
 use crate::store::HABITUATION;
+use crate::store::Repo;
 
 pub use simhash::{distance, simhash};
 
@@ -134,10 +135,10 @@ pub(crate) struct Habituation {
 }
 
 impl Habituation {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            repo: Repo::new(docs, HABITUATION)?,
-        })
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            repo: Repo::new(docs, HABITUATION),
+        }
     }
 
     /// Apply habituation to `score` for `event`, and remember its fingerprint.
@@ -154,7 +155,7 @@ impl Habituation {
                 habituated: false,
             });
         };
-        let id = Key::of(["habituation", event.source.as_str()])?;
+        let id = key_of(&["habituation", event.source.as_str()])?;
         let window = usize::try_from(config.window).unwrap_or(usize::MAX);
         let mut repeats = 0;
         self.repo

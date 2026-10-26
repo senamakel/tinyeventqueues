@@ -9,7 +9,7 @@ use crate::test_support::{Fixture, event};
 
 async fn coalescer(fixture: &Fixture) -> Coalescer {
     crate::store::ensure(fixture.docs.as_ref()).await.unwrap();
-    Coalescer::new(&fixture.docs).unwrap()
+    Coalescer::new(&fixture.docs)
 }
 
 fn config() -> CoalesceConfig {

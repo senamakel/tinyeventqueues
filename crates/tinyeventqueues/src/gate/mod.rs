@@ -23,8 +23,8 @@ mod buckets;
 
 use std::sync::Arc;
 
+use crate::ports::DocumentStore;
 use tinyeventqueues_bus::{EventKind, GateConfig, InboundEvent, RateLimit, Reason};
-use tinystoragedrivers_core::DocumentStore;
 
 use crate::Result;
 use crate::salience::names_sender;
@@ -63,10 +63,10 @@ pub(crate) struct Gate {
 }
 
 impl Gate {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            buckets: Buckets::new(docs)?,
-        })
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            buckets: Buckets::new(docs),
+        }
     }
 
     /// Take one host classification from an hourly budget of

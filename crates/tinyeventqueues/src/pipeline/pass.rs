@@ -1,11 +1,10 @@
 //! One pass of the pipeline's stages, in order.
 
+use crate::ports::{Retry, Versioned};
 use tinyeventqueues_bus::{
     Budget, ClassifySalienceRequest, Disposition, EventRef, InboundEvent, Lane, Outcome, Reason,
     SalienceClass,
 };
-use tinystoragedrivers_core::Versioned;
-use tinystoragedrivers_core::queue::Retry;
 
 use super::{Pipeline, Running};
 use crate::Result;

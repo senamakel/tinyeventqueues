@@ -10,13 +10,13 @@
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, NewMessage, QueueStore, key_of};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{EventRef, InboundEvent, Lane, Reason};
-use tinystoragedrivers_core::queue::{NewMessage, QueueStore};
-use tinystoragedrivers_core::{DocumentStore, Key, Repo};
 
 use crate::Result;
 use crate::config::QueueRef;
+use crate::store::Repo;
 use crate::store::{CONVERSATIONS, Tombstones};
 
 /// A turn waiting in a lane queue.
@@ -60,7 +60,7 @@ impl PendingTurn {
         let (source, id) = first.map_or((String::new(), String::new()), |e| {
             (e.source.clone(), e.event_id.clone())
         });
-        let turn_id = Key::of([
+        let turn_id = key_of(&[
             "turn",
             lane.as_str(),
             conversation_key.as_str(),
@@ -192,14 +192,14 @@ pub(crate) struct Conversations {
 }
 
 impl Conversations {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            repo: Repo::new(docs, CONVERSATIONS)?,
-        })
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            repo: Repo::new(docs, CONVERSATIONS),
+        }
     }
 
     async fn assign(&self, conversation: &str) -> Result<u64> {
-        let id = Key::of(["conversation", conversation])?;
+        let id = key_of(&["conversation", conversation])?;
         let written = self
             .repo
             .update(id.as_str(), |current| {
@@ -222,7 +222,7 @@ impl Conversations {
         gap_timeout_ms: u64,
         now: u64,
     ) -> Result<Turnstile> {
-        let id = Key::of(["conversation", conversation])?;
+        let id = key_of(&["conversation", conversation])?;
         let mut verdict = Turnstile::Go;
         self.repo
             .update(id.as_str(), |current| {
@@ -271,7 +271,7 @@ impl Conversations {
 
     /// Turn `seq` of `conversation` finished: the next one may go.
     pub(crate) async fn finish(&self, conversation: &str, seq: u64) -> Result<()> {
-        let id = Key::of(["conversation", conversation])?;
+        let id = key_of(&["conversation", conversation])?;
         self.repo
             .update(id.as_str(), |current| {
                 let Some(mut state) = current else {

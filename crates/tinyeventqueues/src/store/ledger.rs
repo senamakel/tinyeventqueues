@@ -3,9 +3,9 @@
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, ErrorKind, Filter, Precondition};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{Disposition, EventRef, Outcome, OutcomeCounts, Reason};
-use tinystoragedrivers_core::{DocumentStore, ErrorKind, Filter, Precondition};
 
 use super::{OUTCOMES, event_id};
 use crate::Result;

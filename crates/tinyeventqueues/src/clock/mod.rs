@@ -10,7 +10,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub use tinystoragedrivers_core::Clock;
+/// A host- or test-supplied millisecond clock.
+pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
 /// The system clock: milliseconds since the Unix epoch.
 #[must_use]

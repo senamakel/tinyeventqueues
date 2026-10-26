@@ -5,12 +5,12 @@
 
 use std::sync::Arc;
 
+use crate::ports::NewMessage;
 use serde_json::json;
 use tinyeventqueues_bus::{
     Disposition, EventKind, EventRef, InboundEvent, Lane, MediaRef, RateLimit, Reason,
     SalienceClass, Sender,
 };
-use tinystoragedrivers_core::queue::NewMessage;
 
 use crate::CollectingSink;
 use crate::config::shipped_pipeline_config;

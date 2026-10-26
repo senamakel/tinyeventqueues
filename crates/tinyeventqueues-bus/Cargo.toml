@@ -24,12 +24,12 @@ serde_json = { workspace = true }
 # host composes, so the host derives the module's storage grant from the
 # contract instead of linking the implementation. The default dependency
 # closure of this crate is unchanged without it, which CI asserts.
-tinystoragedrivers-core = { workspace = true, optional = true }
+tinystoragedrivers-types = { workspace = true, optional = true }
 
 [features]
 default = []
-# `storage::storage_schema()`, the module's storage declaration.
-storage = ["dep:tinystoragedrivers-core"]
+# `storage::collection_specs()`, the module's storage declaration.
+storage = ["dep:tinystoragedrivers-types"]
 
 [lints]
 workspace = true

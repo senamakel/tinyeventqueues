@@ -5,13 +5,15 @@
 use std::sync::Arc;
 
 use tinyeventqueues_bus::{Disposition, EventRef, Outcome, Reason};
-use tinystoragedrivers_core::{DocumentStore, MemoryStorage, Scope, StorageBackend};
+use tinystoragedrivers_api::DocumentStore;
+use tinystoragedrivers_testkit::memory_storage;
+use tinystoragedrivers_types::Scope;
 
 use super::*;
 use crate::observe::CollectingSink;
 
 async fn docs() -> Arc<dyn DocumentStore> {
-    let storage = MemoryStorage::new().for_scope(&Scope::local()).unwrap();
+    let storage = memory_storage(&Scope::new("test-store").unwrap());
     let docs = Arc::clone(storage.documents());
     ensure(docs.as_ref()).await.unwrap();
     docs

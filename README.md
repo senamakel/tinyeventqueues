@@ -45,10 +45,9 @@ No queue name or queue spec is written in Rust. To add or tune a queue, edit
 ```rust,ignore
 use std::sync::Arc;
 use tinyeventqueues::{EventKind, InboundEvent, Pipeline, Sender};
-use tinystoragedrivers_core::queue::DocumentQueue;
 
-let queues = Arc::new(DocumentQueue::new(storage.documents()));
-let pipeline = Pipeline::builder(queues, Arc::clone(storage.documents()))
+// `storage` is the host's scope-bound v2 Storage bundle.
+let pipeline = Pipeline::builder(Arc::clone(storage.queues()), Arc::clone(storage.documents()))
     .manifest_path("queues.json")
     .config_path("pipeline.json")
     .build()
@@ -112,8 +111,9 @@ cargo run -p tinyeventqueues --example basic
 .github/scripts/check-file-coverage.sh 90 coverage.json   # needs cargo-llvm-cov
 ```
 
-`tinystoragedrivers-core` is a git dependency pinned to a tinyhumansai
-revision (the one that merged the queue port, tinyhumansai/tinystoragedrivers#71).
+The module uses the v2 `tinystoragedrivers-api`, `-types`, and `-busproxy`
+contracts. Storage engines remain in the host; the testkit and queue memory
+backend are development dependencies only.
 
 ## Releasing
 

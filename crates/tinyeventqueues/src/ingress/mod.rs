@@ -20,11 +20,11 @@ mod types;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::ports::{NewMessage, QueueStore};
 use tinyeventqueues_bus::{
     AckPolicy, Disposition, InboundEvent, IngestResponse, IngestResult, Outcome, PipelineConfig,
     Reason,
 };
-use tinystoragedrivers_core::queue::{NewMessage, QueueStore};
 
 use crate::Result;
 use crate::config::QueueRef;

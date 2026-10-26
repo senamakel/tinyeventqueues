@@ -1,8 +1,8 @@
 //! Loading and validating the two editable files the pipeline runs from.
 //!
-//! - `queues.json`, a [`QueueManifest`]: every queue the pipeline uses, with
-//!   its attempts, dedupe window and lease length. Nothing in Rust names a
-//!   queue or its spec.
+//! - `queues.json`, a private owner config: every queue the pipeline uses,
+//!   with its attempts, dedupe window and lease length. Host grants remain
+//!   host-owned; this declaration only configures the queue port.
 //! - `pipeline.json`, a [`PipelineConfig`]: the pipeline's own tunables, which
 //!   refer to manifest queues by name.
 //!
@@ -18,13 +18,12 @@ mod types;
 use std::path::Path;
 
 use tinyeventqueues_bus::{Budget, Lane, PipelineConfig};
-use tinystoragedrivers_core::queue::QueueManifest;
 
 use crate::cadence::Cadence;
 use crate::salience::MAX_SCORE;
 use crate::{Error, Result};
 
-pub use types::{QueueRef, ResolvedQueues};
+pub use types::{QueueDeclaration, QueueManifest, QueueRef, ResolvedQueues};
 
 /// The `queues.json` shipped at the repository root (the contract's copy, so a
 /// host and this crate read one file).
@@ -66,7 +65,11 @@ pub fn shipped_pipeline_config() -> Result<PipelineConfig> {
 ///
 /// [`Error::Manifest`] naming the offending field or queue.
 pub fn parse_manifest(text: &str) -> Result<QueueManifest> {
-    QueueManifest::from_json(text).map_err(Error::Manifest)
+    let manifest: QueueManifest =
+        serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_str(text))
+            .map_err(|error| Error::manifest(format!("{}: {}", error.path(), error.inner())))?;
+    manifest.validate()?;
+    Ok(manifest)
 }
 
 /// Read and parse the queue manifest at `path`.
@@ -75,7 +78,14 @@ pub fn parse_manifest(text: &str) -> Result<QueueManifest> {
 ///
 /// [`Error::Manifest`] when the file is missing, unreadable or invalid.
 pub fn load_manifest(path: impl AsRef<Path>) -> Result<QueueManifest> {
-    QueueManifest::load(path).map_err(Error::Manifest)
+    let path = path.as_ref();
+    let text = std::fs::read_to_string(path).map_err(|error| {
+        Error::Manifest(crate::ports::StorageError::invalid_input(format!(
+            "{}: {error}",
+            path.display()
+        )))
+    })?;
+    parse_manifest(&text)
 }
 
 /// Parse a pipeline configuration strictly and check its values.
@@ -422,12 +432,13 @@ pub fn resolve_queues(config: &PipelineConfig, manifest: &QueueManifest) -> Resu
                 format!("queue {name:?} is not declared in the queue manifest"),
             ));
         };
-        let Some(visibility_ms) = declared.visibility_ms else {
+        let visibility_ms = declared.visibility_ms;
+        if visibility_ms == 0 {
             return Err(Error::config(
                 field,
-                format!("queue {name:?} needs a visibility_ms in the queue manifest"),
+                "queue must declare a positive visibility_ms",
             ));
-        };
+        }
         if let Some((other, _)) = used.iter().find(|(_, queue)| *queue == name) {
             return Err(Error::config(
                 field,

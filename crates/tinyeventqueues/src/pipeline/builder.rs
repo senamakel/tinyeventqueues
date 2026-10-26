@@ -3,9 +3,9 @@
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+use crate::config::QueueManifest;
+use crate::ports::{Clock, DocumentStore, QueueStore};
 use tinyeventqueues_bus::PipelineConfig;
-use tinystoragedrivers_core::queue::{QueueManifest, QueueStore};
-use tinystoragedrivers_core::{Clock, DocumentStore};
 
 use super::{Inner, Pipeline, Running};
 use crate::cadence::Scheduler;
@@ -141,7 +141,9 @@ impl PipelineBuilder {
             Source::Shipped => shipped_manifest()?,
             Source::Path(path) => load_manifest(path)?,
             Source::Value(manifest) => {
-                manifest.validate().map_err(Error::Manifest)?;
+                manifest
+                    .validate()
+                    .map_err(|error| Error::manifest(error.to_string()))?;
                 manifest
             }
         };
@@ -166,18 +168,18 @@ impl PipelineBuilder {
             ledger.clone(),
             self.consumer.clone(),
         );
-        let gate = Gate::new(&self.docs)?;
-        let ambient = Ambient::new(&self.docs)?;
-        let coalescer = Coalescer::new(&self.docs)?;
-        let conversations = Conversations::new(&self.docs)?;
+        let gate = Gate::new(&self.docs);
+        let ambient = Ambient::new(&self.docs);
+        let coalescer = Coalescer::new(&self.docs);
+        let conversations = Conversations::new(&self.docs);
         let lanes = Lanes::new(
             Arc::clone(&self.queues),
             tombstones.clone(),
             conversations.clone(),
         );
-        let habituation = Habituation::new(&self.docs)?;
-        let digest = Digest::new(&self.docs)?;
-        let scheduler = Scheduler::new(&self.docs)?;
+        let habituation = Habituation::new(&self.docs);
+        let digest = Digest::new(&self.docs);
+        let scheduler = Scheduler::new(&self.docs);
         Ok(Pipeline {
             inner: Arc::new(Inner {
                 queues: self.queues,
@@ -199,7 +201,7 @@ impl PipelineBuilder {
                 digest,
                 scheduler,
                 conversations,
-                threads: Threads::new(&self.docs)?,
+                threads: Threads::new(&self.docs),
                 host: self.host,
                 consumer: self.consumer,
                 pass: tokio::sync::Mutex::new(()),

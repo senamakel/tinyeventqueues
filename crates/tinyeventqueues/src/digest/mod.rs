@@ -6,12 +6,13 @@
 
 use std::sync::Arc;
 
+use crate::ports::DocumentStore;
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{DigestConfig, EventRef, InboundEvent, Lane, Reason};
-use tinystoragedrivers_core::{DocumentStore, Repo};
 
 use crate::Result;
 use crate::store::DIGEST;
+use crate::store::Repo;
 use crate::turn::PendingTurn;
 
 /// The id of the one accumulator document.
@@ -45,10 +46,10 @@ pub(crate) struct Digest {
 }
 
 impl Digest {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            repo: Repo::new(docs, DIGEST)?,
-        })
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            repo: Repo::new(docs, DIGEST),
+        }
     }
 
     /// Add `events` (and the `absorbed` events that share their fate).

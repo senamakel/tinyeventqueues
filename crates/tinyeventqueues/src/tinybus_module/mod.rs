@@ -6,10 +6,11 @@
 //!
 //! * **Storage** ([`storage`]): the host's, over the storage bus — documents
 //!   for the pipeline's `teq.*` state and the queue port for the queues the
-//!   manifest declares, in the one scope the host bound this module to. A host
-//!   that serves no storage leaves the module on memory, logged as an error.
+//!   manifest declares, in the one scope the host bound this module to. An
+//!   explicit invocation address is never substituted, and setup requires
+//!   host-backed storage rather than an in-memory fallback.
 //! * **Configuration** ([`settings`]): the host's private configuration blob
-//!   may carry an opaque host-issued storage lease, a `queues.json` and a
+//!   may carry an invocation-scoped storage address, a `queues.json` and a
 //!   `pipeline.json` document, and timer bounds; absent, the shipped files run.
 //!   The manifest is applied through the queue port at setup.
 //! * **Host callbacks** ([`host`]): `ClassifySalience` and `Deliver` on the
@@ -129,10 +130,30 @@ fn setup_factory() -> impl Fn(Connection, serde_json::Value) -> SetupFuture + Cl
 
 async fn setup(connection: Connection, config: serde_json::Value, slot: Slot) -> TinyBusResult<()> {
     let settings = Settings::parse(config).map_err(|error| failed(&error))?;
-    let backing = storage::open(connection.clone(), settings.storage_descriptor.clone())
+    let address = settings.storage_address().map_err(|error| failed(&error))?;
+    let backing = storage::open(connection.clone(), address)
         .await
         .map_err(|error| failed(&error))?;
-    let durable = backing.durable;
+    install(connection, settings, slot, backing).await
+}
+
+#[cfg(test)]
+async fn setup_with_test_backing(
+    connection: Connection,
+    config: serde_json::Value,
+    slot: Slot,
+    backing: Backing,
+) -> TinyBusResult<()> {
+    let settings = Settings::parse(config).map_err(|error| failed(&error))?;
+    install(connection, settings, slot, backing).await
+}
+
+async fn install(
+    connection: Connection,
+    settings: Settings,
+    slot: Slot,
+    backing: Backing,
+) -> TinyBusResult<()> {
     let host: Arc<dyn Host> = Arc::new(BusHost {
         connection: connection.clone(),
     });
@@ -147,7 +168,7 @@ async fn setup(connection: Connection, config: serde_json::Value, slot: Slot) ->
         )
         .await?;
     connection.request_name(names::INTERFACE).await?;
-    log::info!("[tinyeventqueues] module ready durable={durable}");
+    log::info!("[tinyeventqueues] module ready with host storage");
     Ok(())
 }
 

@@ -13,12 +13,13 @@
 
 use std::sync::Arc;
 
+use crate::ports::{DocumentStore, key_of};
 use serde::{Deserialize, Serialize};
 use tinyeventqueues_bus::{EventRef, InboundEvent, Lane};
-use tinystoragedrivers_core::{DocumentStore, Key, Repo};
 
 use super::PendingTurn;
 use crate::Result;
+use crate::store::Repo;
 use crate::store::THREADS;
 
 /// One queued, unsettled turn of a thread.
@@ -39,7 +40,7 @@ struct Thread {
 }
 
 fn thread_id(first: &InboundEvent) -> Result<String> {
-    Ok(Key::of([
+    Ok(key_of(&[
         "thread",
         first.source.as_str(),
         first.conversation_key.as_str(),
@@ -56,10 +57,10 @@ pub(crate) struct Threads {
 }
 
 impl Threads {
-    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Result<Self> {
-        Ok(Self {
-            repo: Repo::new(docs, THREADS)?,
-        })
+    pub(crate) fn new(docs: &Arc<dyn DocumentStore>) -> Self {
+        Self {
+            repo: Repo::new(docs, THREADS),
+        }
     }
 
     /// The lane a new turn of `first`'s thread wanting `lane` must take, and
