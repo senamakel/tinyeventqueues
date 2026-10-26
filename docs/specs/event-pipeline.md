@@ -164,8 +164,8 @@ are in `tinyeventqueues-bus`.
   queues are those `queues.json` declares, served by the host's queue port.
   Without the callback destination, setup fails; there is no in-memory
   fallback.
-- Configuration: the host-provided private blob carries `storage_callback`
-  (the unique name for the admitted storage callback), plus `queues` (a `queues.json`
+- Configuration: the host-provided private blob carries `storage_address`
+  (the host-issued invocation storage route), plus `queues` (a `queues.json`
   document), `pipeline` (a `pipeline.json` document) and `timer` bounds;
   absent fields run the shipped files. The manifest is applied through the
   queue port at setup.

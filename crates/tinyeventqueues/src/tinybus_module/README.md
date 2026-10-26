@@ -19,13 +19,13 @@ The manifest method list must stay aligned with the interface macro's dispatch
 table and with `tinyeventqueues_bus::names::METHODS`; the unit tests check
 both.
 
-- `settings.rs`: the private configuration blob (`storage_callback`, `queues`,
+- `settings.rs`: the private configuration blob (`storage_address`, `queues`,
   `pipeline`, `timer`), strict, with the shipped files and default timer when absent.
 - `storage.rs`: the host's storage over the `tinystoragedrivers` storage bus,
   the one scope the host bound the module to: documents for the `teq.*` state
   (declared by `tinyeventqueues_bus::storage::collection_specs()`) and the
-  queue port for the manifest's queues. The host-provided `storage_callback`
-  setting names the unique callback binding admitted for this module instance;
+  queue port for the manifest's queues. The host-provided `storage_address`
+  setting names the invocation route admitted for this module instance;
   missing or unusable host storage fails setup rather than starting with an
   ephemeral engine.
 - `host.rs`: `BusHost`, the pipeline's `Host`, calling the host's optional

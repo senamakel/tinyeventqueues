@@ -111,8 +111,9 @@ cargo run -p tinyeventqueues --example basic
 .github/scripts/check-file-coverage.sh 90 coverage.json   # needs cargo-llvm-cov
 ```
 
-`tinystoragedrivers-core` is a git dependency pinned to a tinyhumansai
-revision (the one that merged the queue port, tinyhumansai/tinystoragedrivers#71).
+The module uses the v2 `tinystoragedrivers-api`, `-types`, and `-busproxy`
+contracts. Storage engines remain in the host; the testkit and queue memory
+backend are development dependencies only.
 
 ## Releasing
 

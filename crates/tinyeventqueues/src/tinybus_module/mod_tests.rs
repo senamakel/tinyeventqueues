@@ -15,7 +15,6 @@ use tinyeventqueues_bus::{
     RedriveResponse, Sender, StatsRequest, StatsResponse, names,
 };
 use tinystoragedrivers_api::StorageBackend;
-use tinystoragedrivers_busproxy::StorageServer;
 use tinystoragedrivers_busproxy::{
     PerCallerEndpoint, ServedStorage, StorageAddress, StorageServer, serve, serve_at_address,
 };

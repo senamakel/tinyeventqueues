@@ -17,17 +17,17 @@ one on demand. The interface names, object paths, member names and payload
 types are published as the `tinyeventqueues-bus` crate, so a host names them
 from a library rather than by string literal.
 
-Storage is the host's: the module connects through the unique
-`HostCallbackBinding` destination admitted by the loader and runs over the one
-scope the host bound it to, documents for its `teq.*` state and the queue port
-for the queues `queues.json` declares. `tinyeventqueues-bus` (feature
-`storage`) publishes `collection_specs()` for the module's document state and
-the shipped `queues.json`. The private module configuration must include the
-host-provided `storage_callback` destination; setup fails closed if it is
-missing or unavailable.
+Storage is the host's: the module connects through the invocation-scoped
+`StorageAddress` admitted by its host and runs over the one scope the host
+bound it to, documents for its `teq.*` state and the queue port for the queues
+`queues.json` declares. `tinyeventqueues-bus` (feature `storage`) publishes
+`collection_specs()` for the module's document state and the shipped
+`queues.json`. The private module configuration carries the host-issued
+`storage_address` (`host` and invocation `object_root`); setup fails closed if
+it is missing or unavailable.
 
 The module takes a private configuration blob:
-`{"storage_callback": ":1.42", "queues": <queues.json>, "pipeline": <pipeline.json>, "timer":
+`{"storage_address": {"host": ":1.42", "object_root": "/ai/tinyhumans/tinystorage/Invocation/abc123"}, "queues": <queues.json>, "pipeline": <pipeline.json>, "timer":
 {"enabled": true, "min_interval_ms": 100, "max_interval_ms": 5000}}`. Absent
 fields run the shipped files and the default timer. A host serving the queue
 port should declare the same manifest it passes in `queues`.

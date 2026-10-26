@@ -64,13 +64,12 @@ load, resolve against each other, and that the schema describes every field.
 
 ### Storage
 
-The pipeline is generic over `Arc<dyn QueueStore>` and `Arc<dyn DocumentStore>`
-from `tinystoragedrivers-core`, plus an injectable `Clock`. Every piece of
-durable state lives in those two stores, so a new `Pipeline` over the same
-storage is a restart; tests simulate restarts exactly that way, on
-`MemoryStorage` with a `ManualClock`. `tinystoragedrivers-core` is a git
-dependency pinned to a tinyhumansai/tinystoragedrivers `rev`; move the pin in
-its own commit.
+The pipeline is generic over `QueueStore` and `DocumentStore` from
+`tinystoragedrivers-api` v2, plus an injectable `Clock`. The host declares the
+module's document collections and queue manifest, then serves the scoped
+storage endpoint; the loaded module connects through that host-owned port.
+Tests use the v2 memory backend with a `ManualClock`. Production code does not
+select or construct a storage engine.
 
 ### The two-crate split
 
