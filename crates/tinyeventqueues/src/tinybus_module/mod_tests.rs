@@ -16,9 +16,10 @@ use tinyeventqueues_bus::{
 };
 use tinystoragedrivers_api::StorageBackend;
 use tinystoragedrivers_busproxy::StorageServer;
-use tinystoragedrivers_busproxy::{PerCallerEndpoint, ServedStorage, serve};
+use tinystoragedrivers_busproxy::{
+    PerCallerEndpoint, ServedStorage, StorageAddress, StorageServer, serve, serve_at_address,
+};
 #[cfg(all(target_os = "linux", not(feature = "static-link")))]
-use tinystoragedrivers_busproxy::{prepare_storage_host_callbacks, serve_with_host_callbacks};
 use tinystoragedrivers_testkit::MemoryBackend;
 use tinystoragedrivers_types::Scope;
 
@@ -335,18 +336,14 @@ async fn an_absent_host_makes_delivery_back_off() {
 }
 
 #[tokio::test]
-async fn the_setup_factory_refuses_a_missing_storage_callback() {
-    let rig = rig(true).await;
+async fn the_setup_factory_refuses_missing_host_storage() {
+    let rig = rig(false).await;
     let connection = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
     let setup = setup_factory();
     let error = setup(connection, manual()).await.unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("host callback destination is required")
-    );
+    assert!(error.to_string().contains("storage"), "{error}");
 }
 
 #[tokio::test]
@@ -476,7 +473,7 @@ async fn the_module_timer_delivers_without_a_drain() {
 /// closed instead of borrowing the process-global storage service.
 #[cfg(feature = "static-link")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_linked_module_without_a_storage_callback_fails_closed() {
+async fn the_linked_module_without_host_storage_fails_closed() {
     use tinybus::module::ModuleHost;
     use tinybus::module::ModuleState;
 
@@ -526,11 +523,11 @@ async fn the_linked_module_without_a_storage_callback_fails_closed() {
     );
 }
 
-/// The shipped cdylib uses the unique host callback destination admitted by
-/// TinyBus and reads/writes the host's storage bundle through that binding.
+/// The shipped cdylib uses the invocation address provided by its host and
+/// cannot borrow the same storage endpoint from another bus peer.
 #[cfg(all(target_os = "linux", not(feature = "static-link")))]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_loaded_module_uses_only_its_admitted_host_storage_callback() {
+async fn a_loaded_module_uses_only_its_invocation_storage_address() {
     let source = std::env::current_exe()
         .unwrap()
         .parent()
@@ -562,28 +559,51 @@ async fn a_loaded_module_uses_only_its_admitted_host_storage_callback() {
     let broker = Broker::new();
     let _broker_task = broker.clone().spawn(bus.clone());
     let modules = tinybus::module::ModuleHost::new(broker);
-    let binding = prepare_storage_host_callbacks(&modules).await.unwrap();
+    let storage_host = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let address = StorageAddress::try_new(
+        storage_host.unique_name().unwrap().clone(),
+        format!(
+            "{}/module-{}",
+            tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT,
+            std::process::id()
+        )
+        .parse()
+        .unwrap(),
+    )
+    .unwrap();
     let backend = Arc::new(MemoryBackend::new());
     let bound = Arc::clone(&backend);
-    let endpoint = PerCallerEndpoint::new(move |_sender| {
+    let first_peer = Arc::new(std::sync::Mutex::new(None));
+    let endpoint_first_peer = Arc::clone(&first_peer);
+    let endpoint = PerCallerEndpoint::new(move |sender| {
+        let mut admitted = endpoint_first_peer.lock().ok()?;
+        match admitted.as_ref() {
+            Some(peer) if peer != sender => return None,
+            Some(_) => {}
+            None => *admitted = Some(sender.clone()),
+        }
         let storage = bound.for_scope(&Scope::new("local").ok()?).ok()?;
         Some(StorageServer::new(storage))
     });
-    let _served = serve_with_host_callbacks(binding.clone(), Arc::new(endpoint))
+    let _served = serve_at_address(&storage_host, address.clone(), Arc::new(endpoint))
         .await
         .unwrap();
 
     modules
-        .load_file_with_host_callbacks(
+        .load_file_with_config(
             &artifact,
             json!({
-                "storage_callback": binding.unique_name(),
+                "storage_address": {
+                    "host": address.host().as_str(),
+                    "object_root": address.object_root().as_str(),
+                },
                 "timer": { "enabled": false }
             }),
-            &binding,
         )
-        .await
         .unwrap();
+    modules.ensure_ready(names::INTERFACE).await.unwrap();
     let client = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
@@ -613,7 +633,7 @@ async fn a_loaded_module_uses_only_its_admitted_host_storage_callback() {
         .await
         .unwrap();
     assert!(
-        tinystoragedrivers_busproxy::connect_storage_at(outsider, binding.unique_name().clone(),)
+        tinystoragedrivers_busproxy::connect_storage_at_address(outsider, address)
             .await
             .is_err()
     );
