@@ -155,8 +155,7 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
     let outsider = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
-    let outside = connect_storage_at_address(outsider, address).await.unwrap();
-    assert!(outside.documents().get(OUTCOMES, "bound").await.is_err());
+    assert!(connect_storage_at_address(outsider, address).await.is_err());
     assert!(admitted_calls.load(Ordering::Relaxed) > 0);
 
     served.shutdown().await.unwrap();
