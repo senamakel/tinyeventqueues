@@ -42,10 +42,10 @@ log = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true }
 # Real in-memory engines and shared queue conformance checks, for tests only.
-tinystoragedrivers-testkit = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "bf1f0a9" }
+tinystoragedrivers-testkit = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "29471a164619bcec03e5858a7d7ee0c65f52bf22" }
 # Deterministic queue-clock tests use the v2 memory engine with the pipeline
 # ManualClock; production still receives QueueStore only from the host.
-tinystoragedrivers-queue = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "bf1f0a9" }
+tinystoragedrivers-queue = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "29471a164619bcec03e5858a7d7ee0c65f52bf22" }
 # The public-API test implements the `Host` trait as a downstream host does.
 async-trait = { workspace = true }
 # The release verifier passes an explicit empty module configuration, and the
