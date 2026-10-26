@@ -102,7 +102,7 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
     let address = StorageAddress::try_new(
         host.unique_name().unwrap().clone(),
         format!(
-            "{}/event-queues-1",
+            "{}/event_queues_1",
             tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT
         )
         .parse()

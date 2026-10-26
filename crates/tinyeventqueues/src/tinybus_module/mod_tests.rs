@@ -565,7 +565,7 @@ async fn a_loaded_module_uses_only_its_invocation_storage_address() {
     let address = StorageAddress::try_new(
         storage_host.unique_name().unwrap().clone(),
         format!(
-            "{}/module-{}",
+            "{}/module_{}",
             tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT,
             std::process::id()
         )
