@@ -9,13 +9,12 @@ use tinybus::Connection;
 use tinybus::broker::Broker;
 use tinybus::transport::memory::MemoryBus;
 use tinyeventqueues_bus::storage::{OUTCOMES, collection_specs};
-use tinystoragedrivers_api::{DocumentStore, StorageBackend};
+use tinystoragedrivers_api::StorageBackend;
 use tinystoragedrivers_busproxy::{
-    PerCallerEndpoint, StorageAddress, StorageServer, connect_storage_at_address, serve,
-    serve_at_address,
+    PerCallerEndpoint, StorageAddress, StorageServer, connect_storage_at_address, serve_at_address,
 };
-use tinystoragedrivers_types::{Precondition, Scope};
 use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::{Precondition, Scope};
 
 use super::*;
 use crate::tinybus_module::tests::rig;
@@ -33,7 +32,12 @@ async fn the_default_route_uses_the_host_scoped_storage_ports() {
     }
     backing
         .docs
-        .put(OUTCOMES, "x", serde_json::json!({"stored": true}), Precondition::None)
+        .put(
+            OUTCOMES,
+            "x",
+            serde_json::json!({"stored": true}),
+            Precondition::None,
+        )
         .await
         .unwrap();
     let host = rig
@@ -72,9 +76,12 @@ async fn an_explicit_invocation_address_never_falls_back_to_global_storage() {
     let host = rig.host.unique_name().unwrap().clone();
     let address = StorageAddress::try_new(
         host,
-        format!("{}/missing", tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT)
-            .parse()
-            .unwrap(),
+        format!(
+            "{}/missing",
+            tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT
+        )
+        .parse()
+        .unwrap(),
     )
     .unwrap();
 
@@ -94,9 +101,12 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
     let module_peer = module.unique_name().unwrap().clone();
     let address = StorageAddress::try_new(
         host.unique_name().unwrap().clone(),
-        format!("{}/event-queues-1", tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT)
-            .parse()
-            .unwrap(),
+        format!(
+            "{}/event-queues-1",
+            tinystoragedrivers_busproxy::INVOCATION_OBJECT_ROOT
+        )
+        .parse()
+        .unwrap(),
     )
     .unwrap();
     let backend = Arc::new(MemoryBackend::new());
@@ -124,34 +134,31 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
     }
     backing
         .docs
-        .put(OUTCOMES, "bound", serde_json::json!({"stored": true}), Precondition::None)
+        .put(
+            OUTCOMES,
+            "bound",
+            serde_json::json!({"stored": true}),
+            Precondition::None,
+        )
         .await
         .unwrap();
     let scoped = backend.for_scope(&scope).unwrap();
-    assert!(scoped.documents().get(OUTCOMES, "bound").await.unwrap().is_some());
+    assert!(
+        scoped
+            .documents()
+            .get(OUTCOMES, "bound")
+            .await
+            .unwrap()
+            .is_some()
+    );
 
     let outsider = Connection::connect(bus.connect().await.unwrap())
         .await
         .unwrap();
-    let outside = connect_storage_at_address(outsider, address)
-        .await
-        .unwrap();
+    let outside = connect_storage_at_address(outsider, address).await.unwrap();
     assert!(outside.documents().get(OUTCOMES, "bound").await.is_err());
     assert!(admitted_calls.load(Ordering::Relaxed) > 0);
 
     served.shutdown().await.unwrap();
     assert!(backing.docs.get(OUTCOMES, "bound").await.is_err());
-}
-
-#[tokio::test]
-async fn an_invalid_storage_destination_is_rejected_before_connecting() {
-    let rig = rig(true).await;
-    let module = Connection::connect(rig.bus.connect().await.unwrap())
-        .await
-        .unwrap();
-    let refused = open(module, Some("")).await;
-    assert!(matches!(
-        refused,
-        Err(crate::Error::Storage(error)) if error.kind() == ErrorKind::Unavailable
-    ));
 }

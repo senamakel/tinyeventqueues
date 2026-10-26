@@ -119,7 +119,10 @@ impl Settings {
         let host = BusName::new(&config.host)
             .map_err(|_| Error::config("storage_address.host", "expected a unique bus name"))?;
         let root = ObjectPath::new(&config.object_root).map_err(|_| {
-            Error::config("storage_address.object_root", "expected an invocation object path")
+            Error::config(
+                "storage_address.object_root",
+                "expected an invocation object path",
+            )
         })?;
         StorageAddress::try_new(host, root)
             .map(Some)
