@@ -78,6 +78,23 @@ fn storage_addresses_reject_non_unique_hosts_and_unscoped_roots() {
 }
 
 #[test]
+fn an_invalid_object_path_is_reported_as_a_configuration_error() {
+    let settings = Settings::parse(json!({
+        "storage_address": {
+            "host": ":1.23",
+            "object_root": "not/an/object/path"
+        }
+    }))
+    .unwrap();
+
+    let error = settings.storage_address().unwrap_err();
+    assert!(
+        error.to_string().contains("storage_address.object_root"),
+        "{error}"
+    );
+}
+
+#[test]
 fn old_lease_descriptor_fields_are_not_accepted_as_an_address() {
     let error = Settings::parse(json!({
         "storage_descriptor": {
