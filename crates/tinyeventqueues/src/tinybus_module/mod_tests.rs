@@ -16,10 +16,11 @@ use tinyeventqueues_bus::{
 };
 use tinystoragedrivers_api::StorageBackend;
 use tinystoragedrivers_busproxy::{
-    PerCallerEndpoint, ServedStorage, StorageAddress, StorageServer, serve, serve_at_address,
+    PerCallerEndpoint, ServedStorage, StorageServer, serve,
 };
-#[cfg(all(target_os = "linux", not(feature = "static-link")))]
 use tinystoragedrivers_testkit::MemoryBackend;
+#[cfg(all(target_os = "linux", not(feature = "static-link")))]
+use tinystoragedrivers_busproxy::{StorageAddress, serve_at_address};
 use tinystoragedrivers_types::Scope;
 
 use super::host::BusHost;
