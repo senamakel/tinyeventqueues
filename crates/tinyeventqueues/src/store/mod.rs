@@ -20,14 +20,15 @@ use std::sync::Arc;
 
 use crate::ports::{DocumentStore, Filter, Precondition, key_of};
 use serde::{Deserialize, Serialize};
+use tinystoragedrivers_types::{CollectionSpec, IndexSpec};
 
 use crate::Result;
 
 pub(crate) use ledger::Ledger;
 pub(crate) use repo::Repo;
 
-// The collection names and specs are the contract's, so the host's grant and
-// what the module ensures cannot drift.
+// The contract owns the declaration data; this adapter maps it to the storage
+// port's API so the host's grant and what the module ensures cannot drift.
 pub(crate) use tinyeventqueues_bus::storage::{
     AMBIENT, BUCKETS, CADENCE, COALESCE, CONVERSATIONS, DIGEST, HABITUATION, OUTCOMES, REDRIVEN,
     STAGED, THREADS, TOMBSTONES, collection_specs,
@@ -35,10 +36,26 @@ pub(crate) use tinyeventqueues_bus::storage::{
 
 /// Declare every collection on `docs`. Idempotent.
 pub(crate) async fn ensure(docs: &dyn DocumentStore) -> Result<()> {
-    for spec in collection_specs() {
+    for declaration in collection_specs() {
+        let spec = collection_spec(declaration);
         docs.ensure_collection(&spec).await?;
     }
     Ok(())
+}
+
+/// Translate the bus-owned schema into the storage port's local type.
+pub(crate) fn collection_spec(
+    declaration: tinyeventqueues_bus::storage::CollectionDeclaration,
+) -> CollectionSpec {
+    let mut spec = CollectionSpec::new(declaration.name);
+    for index in declaration.indexes {
+        let mut spec_index = IndexSpec::new(index.name, index.fields);
+        if index.unique {
+            spec_index = spec_index.unique();
+        }
+        spec = spec.index(spec_index);
+    }
+    spec
 }
 
 /// The document id of an event: its source and id, escaped and joined.

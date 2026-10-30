@@ -19,17 +19,10 @@ publish = false
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-# Optional (feature `storage`, off by default): storage ports only (no driver,
-# no I/O). The `storage` module declares what the module stores as a schema a
-# host composes, so the host derives the module's storage grant from the
-# contract instead of linking the implementation. The default dependency
-# closure of this crate is unchanged without it, which CI asserts.
-tinystoragedrivers-types = { workspace = true, optional = true }
-
 [features]
 default = []
 # `storage::collection_specs()`, the module's storage declaration.
-storage = ["dep:tinystoragedrivers-types"]
+storage = []
 
 [lints]
 workspace = true

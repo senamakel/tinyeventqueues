@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tinybus::Connection;
 use tinybus::broker::Broker;
 use tinybus::transport::memory::MemoryBus;
-use tinyeventqueues_bus::storage::{OUTCOMES, collection_specs};
+use tinyeventqueues_bus::storage::OUTCOMES;
 use tinystoragedrivers_api::StorageBackend;
 use tinystoragedrivers_busproxy::{
     PerCallerEndpoint, StorageAddress, StorageServer, connect_storage_at_address, serve_at_address,
@@ -17,6 +17,7 @@ use tinystoragedrivers_testkit::MemoryBackend;
 use tinystoragedrivers_types::{Precondition, Scope};
 
 use super::*;
+use crate::store::{collection_spec, collection_specs};
 use crate::tinybus_module::tests::rig;
 
 #[tokio::test]
@@ -27,7 +28,8 @@ async fn the_default_route_uses_the_host_scoped_storage_ports() {
         .unwrap();
     let backing = open(module, None).await.unwrap();
 
-    for spec in collection_specs() {
+    for declaration in collection_specs() {
+        let spec = collection_spec(declaration);
         backing.docs.ensure_collection(&spec).await.unwrap();
     }
     backing
@@ -129,7 +131,8 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
         .unwrap();
 
     let backing = open(module.clone(), Some(address.clone())).await.unwrap();
-    for spec in collection_specs() {
+    for declaration in collection_specs() {
+        let spec = collection_spec(declaration);
         backing.docs.ensure_collection(&spec).await.unwrap();
     }
     backing
