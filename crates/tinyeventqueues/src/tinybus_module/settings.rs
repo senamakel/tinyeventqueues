@@ -114,6 +114,9 @@ impl Settings {
     }
 
     /// Resolve the exact host callback peer without an invocation-route fallback.
+    ///
+    /// # Errors
+    /// Returns a configuration error for a non-unique peer or conflicting routes.
     pub(crate) fn storage_callback(&self) -> Result<Option<BusName>> {
         let Some(callback) = &self.storage_callback else {
             return Ok(None);

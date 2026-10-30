@@ -26,6 +26,10 @@ impl Backing {
 
 /// Connect to one explicitly admitted host callback peer at the standard ports.
 /// Invalid, missing, or unavailable peers never fall back to global storage.
+///
+/// # Errors
+/// Returns a configuration error for a non-unique peer, or the storage error
+/// when the admitted callback cannot provide its ports.
 pub(crate) async fn open_callback(connection: Connection, peer: BusName) -> Result<Backing> {
     if !peer.is_unique() {
         return Err(Error::config(

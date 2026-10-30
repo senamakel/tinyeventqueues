@@ -130,15 +130,14 @@ fn setup_factory() -> impl Fn(Connection, serde_json::Value) -> SetupFuture + Cl
 
 async fn setup(connection: Connection, config: serde_json::Value, slot: Slot) -> TinyBusResult<()> {
     let settings = Settings::parse(config).map_err(|error| failed(&error))?;
-    let backing = match settings
+    let backing = if let Some(peer) = settings
         .storage_callback()
         .map_err(|error| failed(&error))?
     {
-        Some(peer) => storage::open_callback(connection.clone(), peer).await,
-        None => {
-            let address = settings.storage_address().map_err(|error| failed(&error))?;
-            storage::open(connection.clone(), address).await
-        }
+        storage::open_callback(connection.clone(), peer).await
+    } else {
+        let address = settings.storage_address().map_err(|error| failed(&error))?;
+        storage::open(connection.clone(), address).await
     }
     .map_err(|error| failed(&error))?;
     install(connection, settings, slot, backing).await
