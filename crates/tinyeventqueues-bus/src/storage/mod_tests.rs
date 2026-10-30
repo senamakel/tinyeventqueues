@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn collection_specs_are_pure_owner_declarations() {
-    let specs = collection_specs();
+    let specs: Vec<CollectionDeclaration> = collection_specs();
     assert_eq!(specs.len(), 12);
     let mut names = std::collections::HashSet::new();
     for spec in &specs {
@@ -21,12 +21,22 @@ fn collection_specs_are_pure_owner_declarations() {
     assert_eq!(specs[0].indexes[0].fields, ["disposition"]);
     assert_eq!(specs[0].indexes[1].fields, ["expires_ms"]);
     assert_eq!(specs.last().unwrap().name, COALESCE);
+    assert_eq!(
+        serde_json::to_value(&specs[0]).unwrap(),
+        serde_json::json!({
+            "name": OUTCOMES,
+            "indexes": [
+                { "name": "by_disposition", "fields": ["disposition"], "unique": false },
+                { "name": "by_expiry", "fields": ["expires_ms"], "unique": false }
+            ]
+        })
+    );
 }
 
 #[test]
 fn host_can_compose_collection_specs_with_its_other_storage() {
     let mut all = collection_specs();
-    all.push(CollectionSpec::new("host.preferences"));
+    all.push(CollectionDeclaration::new("host.preferences"));
     let mut names = std::collections::HashSet::new();
     assert!(all.iter().all(|spec| names.insert(spec.name.as_str())));
 }
