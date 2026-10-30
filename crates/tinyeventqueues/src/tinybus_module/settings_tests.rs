@@ -128,3 +128,30 @@ fn an_invalid_document_fails_when_it_is_read() {
     assert!(settings.manifest().is_err());
     assert!(settings.pipeline().is_err());
 }
+
+#[test]
+fn a_host_bound_storage_callback_is_an_accepted_module_configuration() {
+    let settings = Settings::parse(json!({"storage_callback": ":1.23"}));
+    assert!(
+        settings.is_ok(),
+        "host callback config was refused: {settings:?}"
+    );
+}
+
+#[test]
+fn storage_callbacks_require_a_unique_peer_and_one_route() {
+    let settings = Settings::parse(json!({"storage_callback": ":1.23"})).unwrap();
+    assert_eq!(
+        settings.storage_callback().unwrap().unwrap().as_str(),
+        ":1.23"
+    );
+    for peer in ["ai.tinyhumans.tinystorage.Storage", "not a peer", ""] {
+        let settings = Settings::parse(json!({"storage_callback": peer})).unwrap();
+        assert!(settings.storage_callback().is_err());
+    }
+    let settings = Settings::parse(json!({
+        "storage_callback": ":1.23",
+        "storage_address": {"host": ":1.24", "object_root": "/ai/tinyhumans/tinystorage/Invocation/x"}
+    })).unwrap();
+    assert!(settings.storage_callback().is_err());
+}

@@ -15,6 +15,10 @@
 //! }
 //! ```
 //!
+//! A `storage_callback` unique peer selects the host-bound callback endpoint.
+//! It is mutually exclusive with `storage_address`; an explicit route never
+//! falls back to global storage.
+//!
 //! `storage_address` identifies the host's invocation-scoped storage endpoint.
 //! Its unique peer and invocation root must be issued by the host. An explicit
 //! address never falls back to another storage route. `queues` is a
@@ -37,6 +41,9 @@ use tinystoragedrivers_busproxy::StorageAddress;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Settings {
+    /// A host-bound storage callback peer; never a module-selected alias.
+    #[serde(default)]
+    storage_callback: Option<String>,
     /// Host-issued route for this module instance's scoped storage.
     #[serde(default)]
     storage_address: Option<StorageAddressConfig>,
@@ -104,6 +111,28 @@ impl Settings {
             ));
         }
         Ok(settings)
+    }
+
+    /// Resolve the exact host callback peer without an invocation-route fallback.
+    pub(crate) fn storage_callback(&self) -> Result<Option<BusName>> {
+        let Some(callback) = &self.storage_callback else {
+            return Ok(None);
+        };
+        if self.storage_address.is_some() {
+            return Err(Error::config(
+                "storage_callback",
+                "cannot combine callback and invocation storage routes",
+            ));
+        }
+        let peer = BusName::new(callback)
+            .map_err(|_| Error::config("storage_callback", "expected a unique host peer"))?;
+        if !peer.is_unique() {
+            return Err(Error::config(
+                "storage_callback",
+                "expected a unique host peer",
+            ));
+        }
+        Ok(Some(peer))
     }
 
     /// Validate and build the host-issued invocation storage address, if set.
