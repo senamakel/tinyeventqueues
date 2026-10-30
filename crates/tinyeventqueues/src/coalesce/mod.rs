@@ -4,7 +4,9 @@
 //! Events are buffered per `(source, conversation_key, thread_key, sender)`.
 //! A buffer is due `debounce_ms` after its last event or `max_wait_ms` after
 //! its first, whichever is earlier; an event with media or a control command
-//! makes it due at once. Buffers of different threads are never merged, and
+//! makes it due at once, and so does reaching its source's `max_events`. A
+//! source's own `coalesce` policy replaces the pipeline's timings for its
+//! buffers ([`Window`]). Buffers of different threads are never merged, and
 //! events keep their arrival order within a buffer.
 //!
 //! When any buffer of a thread is due, every buffer of that thread is flushed,
@@ -22,7 +24,7 @@ use std::sync::Arc;
 use crate::ports::{
     DocumentStore, ErrorKind, Filter, Precondition, Query, Sort, Versioned, key_of,
 };
-use tinyeventqueues_bus::{CoalesceConfig, EventKind, EventRef, InboundEvent};
+use tinyeventqueues_bus::{CoalesceConfig, EventKind, EventRef, InboundEvent, PipelineConfig};
 
 use crate::Result;
 use crate::store::COALESCE;
@@ -48,8 +50,50 @@ pub(crate) struct Due {
     pub(crate) found: Versioned<Buffer>,
 }
 
+/// The debounce one event's buffer runs under: the pipeline's
+/// [`CoalesceConfig`], with its source's own `coalesce` overrides.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Window {
+    pub(crate) debounce_ms: u64,
+    pub(crate) max_wait_ms: u64,
+    /// A buffer holding this many events is due at once; a flush hands at
+    /// most this many to one turn.
+    pub(crate) max_events: Option<u32>,
+    pub(crate) control_prefixes: Vec<String>,
+}
+
+impl From<&CoalesceConfig> for Window {
+    fn from(config: &CoalesceConfig) -> Self {
+        Self {
+            debounce_ms: config.debounce_ms,
+            max_wait_ms: config.max_wait_ms,
+            max_events: None,
+            control_prefixes: config.control_prefixes.clone(),
+        }
+    }
+}
+
+impl Window {
+    /// The window of `source`'s buffers under `config`.
+    pub(crate) fn of(config: &PipelineConfig, source: &str) -> Self {
+        let mut window = Self::from(&config.coalesce);
+        if let Some(own) = config.source_policy(source).coalesce {
+            window.debounce_ms = own.debounce_ms.unwrap_or(window.debounce_ms);
+            window.max_wait_ms = own.max_wait_ms.unwrap_or(window.max_wait_ms);
+            window.max_events = own.max_events;
+        }
+        window
+    }
+
+    /// Whether `held` events fill a buffer.
+    fn is_full(&self, held: usize) -> bool {
+        self.max_events
+            .is_some_and(|max| held >= usize::try_from(max).unwrap_or(usize::MAX))
+    }
+}
+
 /// Whether `event` flushes its buffer at once.
-fn flushes_now(event: &InboundEvent, config: &CoalesceConfig) -> bool {
+fn flushes_now(event: &InboundEvent, config: &Window) -> bool {
     let text = event.text.trim_start();
     !event.media.is_empty()
         || config
@@ -101,7 +145,7 @@ impl Coalescer {
         &self,
         event: &InboundEvent,
         arrival_ms: u64,
-        config: &CoalesceConfig,
+        config: &Window,
         now: u64,
     ) -> Result<Added> {
         let id = buffer_id(event)?;
@@ -117,7 +161,7 @@ impl Coalescer {
                 }
                 added = buffer.add(event);
                 buffer.last_ms = now;
-                buffer.urgent |= flushes_now(event, config);
+                buffer.urgent |= flushes_now(event, config) || config.is_full(buffer.events.len());
                 buffer.due_ms = if buffer.urgent {
                     buffer.due_ms.min(now)
                 } else {

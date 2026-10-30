@@ -183,6 +183,9 @@
         },
         "budget": {
           "$ref": "#/$defs/budget"
+        },
+        "coalesce": {
+          "$ref": "#/$defs/sourceCoalesce"
         }
       }
     },
@@ -573,6 +576,28 @@
           "minimum": 1,
           "default": 120000,
           "description": "On a queue backend without groups, how long a conversation waits for a turn lost to a crash before skipping it."
+        }
+      }
+    },
+    "sourceCoalesce": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The source's own debounce. A field left out keeps the pipeline's coalesce value.",
+      "properties": {
+        "debounce_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Flush this long after a buffer's last event, in milliseconds."
+        },
+        "max_wait_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Flush this long after a buffer's first event at the latest, in milliseconds."
+        },
+        "max_events": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A buffer holding this many events flushes at once, and one turn carries at most this many."
         }
       }
     }

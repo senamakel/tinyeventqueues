@@ -10,6 +10,7 @@
 //! ```
 
 use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tinybus::Connection;
@@ -17,6 +18,10 @@ use tinybus::broker::Broker;
 use tinybus::module::ModuleHost;
 use tinybus::transport::memory::MemoryBus;
 use tinyeventqueues::{StatsRequest, StatsResponse, names};
+use tinystoragedrivers_api::StorageBackend;
+use tinystoragedrivers_busproxy::{HOST_NAME, PerCallerEndpoint, StorageServer, serve};
+use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::Scope;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,12 +29,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bus = MemoryBus::new();
     let broker = Broker::new();
     let broker_task = broker.spawn(bus.clone());
+    // The module refuses to start without host storage. Serve memory storage
+    // under the shared storage service name, as a host that serves one storage
+    // service for every module does.
+    let host = Connection::connect(bus.connect().await?).await?;
+    let backend = Arc::new(MemoryBackend::new());
+    let endpoint = PerCallerEndpoint::new(move |_sender| {
+        let storage = backend.for_scope(&Scope::new("local").ok()?).ok()?;
+        Some(StorageServer::new(storage))
+    });
+    let _served = serve(&host, Arc::new(endpoint)).await?;
     let module_host = ModuleHost::new(broker);
     let info = module_host.load_github_release(
         &release_url,
         &archive,
         Some(&sha256),
-        serde_json::Value::default(),
+        serde_json::json!({ "storage_callback": HOST_NAME }),
     )?;
 
     if info.name != env!("CARGO_PKG_NAME") {

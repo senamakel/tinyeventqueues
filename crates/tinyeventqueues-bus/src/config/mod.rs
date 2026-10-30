@@ -16,7 +16,7 @@ pub use types::{
     AckPolicy, AmbientConfig, Borderline, BotLoopConfig, Budget, CoalesceConfig, DeadLetterConfig,
     DigestConfig, DispatchConfig, GateConfig, HabituationConfig, IngressConfig, Lane, LaneConfig,
     LanesConfig, PipelineConfig, RateLimit, RateLimits, SalienceConfig, SalienceThresholds,
-    SalienceWeights, SourcePolicy,
+    SalienceWeights, SourceCoalesce, SourcePolicy,
 };
 
 #[cfg(test)]

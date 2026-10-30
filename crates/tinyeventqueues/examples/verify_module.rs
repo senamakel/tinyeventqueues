@@ -11,7 +11,9 @@ use tinybus::module::ModuleHost;
 use tinybus::transport::memory::MemoryBus;
 use tinyeventqueues::{StatsRequest, StatsResponse, names};
 use tinystoragedrivers_api::StorageBackend;
-use tinystoragedrivers_busproxy::{PerCallerEndpoint, StorageServer};
+use tinystoragedrivers_busproxy::{
+    PerCallerEndpoint, StorageServer, prepare_storage_host_callbacks, serve_with_host_callbacks,
+};
 use tinystoragedrivers_testkit::MemoryBackend;
 use tinystoragedrivers_types::Scope;
 
@@ -20,15 +22,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let module = module_argument()?;
     let bus = MemoryBus::new();
     let broker = Broker::new();
-    let broker_task = broker.spawn(bus.clone());
+    let broker_task = broker.clone().spawn(bus.clone());
     let module_host = ModuleHost::new(broker);
-    // This verifier is the storage host; the production module selects no engine.
-    let storage_host = Connection::connect(bus.connect().await?).await?;
-    let backend = MemoryBackend::new();
-    let storage = backend.for_scope(&Scope::new("module-verification")?)?;
-    let endpoint = PerCallerEndpoint::new(move |_| Some(StorageServer::new(storage.clone())));
-    let _served = tinystoragedrivers_busproxy::serve(&storage_host, Arc::new(endpoint)).await?;
-    let info = module_host.load_file(&module)?;
+    let binding = prepare_storage_host_callbacks(&module_host).await?;
+    let backend = Arc::new(MemoryBackend::new());
+    let bound = Arc::clone(&backend);
+    let endpoint = PerCallerEndpoint::new(move |_sender| {
+        let storage = bound.for_scope(&Scope::new("local").ok()?).ok()?;
+        Some(StorageServer::new(storage))
+    });
+    let _served = serve_with_host_callbacks(binding.clone(), Arc::new(endpoint)).await?;
+    write_module_manifest(&module)?;
+    let info = module_host
+        .load_file_with_host_callbacks(
+            &module,
+            serde_json::json!({ "storage_callback": binding.unique_name() }),
+            &binding,
+        )
+        .await?;
 
     if info.name != env!("CARGO_PKG_NAME") {
         return Err(io::Error::other(format!(
@@ -65,6 +76,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info.name
     );
     broker_task.abort();
+    Ok(())
+}
+
+fn write_module_manifest(module: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    let directory = module.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "module path has no parent directory",
+        )
+    })?;
+    let name = module
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "module filename is not valid UTF-8",
+            )
+        })?;
+    let hash = tinybus::module::sha256_file(module)?;
+    let manifest = directory.join("modules.toml");
+    std::fs::write(manifest, format!("\"{name}\" = \"{hash}\"\n"))?;
     Ok(())
 }
 

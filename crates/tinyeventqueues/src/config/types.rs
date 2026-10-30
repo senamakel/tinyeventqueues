@@ -42,7 +42,9 @@ impl QueueManifest {
             return Err(crate::Error::manifest("version must be 1"));
         }
         if self.queues.is_empty() {
-            return Err(crate::Error::manifest("at least one queue is required"));
+            return Err(crate::Error::manifest(
+                "queues must contain at least one queue",
+            ));
         }
         let mut names = std::collections::HashSet::new();
         for (index, queue) in self.queues.iter().enumerate() {
@@ -65,9 +67,14 @@ impl QueueManifest {
                     queue.name
                 )));
             }
-            if queue.max_attempts == 0 || queue.visibility_ms == 0 {
+            if queue.max_attempts == 0 {
                 return Err(crate::Error::manifest(format!(
-                    "queues[{index}] max_attempts and visibility_ms must be positive"
+                    "queues[{index}].max_attempts must be positive"
+                )));
+            }
+            if queue.visibility_ms == 0 {
+                return Err(crate::Error::manifest(format!(
+                    "queues[{index}].visibility_ms must be positive"
                 )));
             }
         }

@@ -32,6 +32,11 @@ The module takes a private configuration blob:
 fields run the shipped files and the default timer. A host serving the queue
 port should declare the same manifest it passes in `queues`.
 
+A `pipeline.sources[]` entry may carry `"coalesce": {"debounce_ms": …,
+"max_wait_ms": …, "max_events": …}`, the source's own debounce: it replaces
+the pipeline's `coalesce` timings for that source, and `max_events` caps how
+many events one turn of it carries. Releases before v0.1.3 reject the field.
+
 The archive contains one `.so`, `.dylib`, or `.dll` plus `modules.toml`. Keep
 those files together when copying them into a TinyBus module directory. The
 allowlist binds the native library filename to its SHA-256 digest so TinyBus can

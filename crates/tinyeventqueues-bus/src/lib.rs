@@ -61,7 +61,7 @@ pub use config::{
     AckPolicy, AmbientConfig, Borderline, BotLoopConfig, Budget, CoalesceConfig, DeadLetterConfig,
     DigestConfig, DispatchConfig, GateConfig, HabituationConfig, IngressConfig, Lane, LaneConfig,
     LanesConfig, PipelineConfig, RateLimit, RateLimits, SalienceConfig, SalienceThresholds,
-    SalienceWeights, SourcePolicy,
+    SalienceWeights, SourceCoalesce, SourcePolicy,
 };
 pub use event::{EventKind, EventRef, InboundEvent, MediaRef, PayloadRef, Sender};
 pub use host::{

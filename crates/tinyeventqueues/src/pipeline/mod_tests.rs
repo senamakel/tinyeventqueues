@@ -150,6 +150,8 @@ async fn the_builder_loads_files_from_disk_and_rejects_bad_values() {
         .await
         .unwrap_err();
     assert!(matches!(error, Error::Manifest(_)));
+    assert!(error.to_string().contains("version must be 1"));
+    assert_eq!(error.to_string().matches("queue manifest:").count(), 1);
 
     let mut config = shipped_pipeline_config().unwrap();
     config.version = 2;

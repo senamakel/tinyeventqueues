@@ -4,7 +4,7 @@
 
 use serde_json::json;
 
-use super::{AckPolicy, Lane, PipelineConfig, SourcePolicy};
+use super::{AckPolicy, Lane, PipelineConfig, SourceCoalesce, SourcePolicy};
 
 fn minimal() -> serde_json::Value {
     json!({
@@ -195,4 +195,50 @@ fn dispatch_defaults_when_absent() {
     assert_eq!(config.dispatch.backoff_base_ms, 1_000);
     assert_eq!(config.dispatch.backoff_max_ms, 300_000);
     assert_eq!(config.dispatch.gap_timeout_ms, 120_000);
+}
+
+#[test]
+fn a_source_may_carry_its_own_debounce() {
+    let mut value = minimal();
+    value["sources"] = json!([
+        {"match": "x:mentions", "coalesce": {"debounce_ms": 30_000, "max_wait_ms": 300_000, "max_events": 20}},
+        {"match": "x:*", "coalesce": {"max_events": 5}},
+        {"match": "*"}
+    ]);
+    let config: PipelineConfig = serde_json::from_value(value).unwrap();
+    let own = config.source_policy("x:mentions").coalesce.unwrap();
+    assert_eq!(
+        (own.debounce_ms, own.max_wait_ms, own.max_events),
+        (Some(30_000), Some(300_000), Some(20))
+    );
+    let partial = config.source_policy("x:dms").coalesce.unwrap();
+    assert_eq!(
+        (partial.debounce_ms, partial.max_wait_ms, partial.max_events),
+        (None, None, Some(5))
+    );
+    assert_eq!(config.source_policy("web:chat").coalesce, None);
+    assert_eq!(SourcePolicy::default().coalesce, None);
+    let encoded = serde_json::to_value(&config).unwrap();
+    assert!(encoded["sources"][2].get("coalesce").is_none());
+    assert_eq!(
+        serde_json::from_value::<PipelineConfig>(encoded).unwrap(),
+        config
+    );
+
+    let mut typo = minimal();
+    typo["sources"] = json!([{"match": "x:*", "coalesce": {"debounce": 5}}]);
+    assert!(serde_json::from_value::<PipelineConfig>(typo).is_err());
+}
+
+#[test]
+fn a_source_debounce_builds_from_its_settings() {
+    let own = SourceCoalesce::new()
+        .debounce_ms(10)
+        .max_wait_ms(50)
+        .max_events(3);
+    assert_eq!(
+        (own.debounce_ms, own.max_wait_ms, own.max_events),
+        (Some(10), Some(50), Some(3))
+    );
+    assert_eq!(SourceCoalesce::default(), SourceCoalesce::new());
 }

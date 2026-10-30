@@ -691,6 +691,58 @@ pub struct SourcePolicy {
     /// The budget of the source's cadence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<Budget>,
+    /// The source's own debounce, overriding the pipeline's
+    /// [`CoalesceConfig`] timings for its buffers and capping their size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coalesce: Option<SourceCoalesce>,
+}
+
+/// One source's debounce. A field left out keeps the pipeline's
+/// [`CoalesceConfig`] value; `max_events` has no pipeline-wide counterpart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct SourceCoalesce {
+    /// Flush this long after a buffer's last event, in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debounce_ms: Option<u64>,
+    /// Flush this long after a buffer's first event at the latest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_wait_ms: Option<u64>,
+    /// A buffer holding this many events flushes at once, and one flushed
+    /// turn carries at most this many. Absent, a buffer is unbounded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_events: Option<u32>,
+}
+
+impl SourceCoalesce {
+    /// A debounce that keeps every pipeline value.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Flush `debounce_ms` after a buffer's last event.
+    #[must_use]
+    pub fn debounce_ms(mut self, debounce_ms: u64) -> Self {
+        self.debounce_ms = Some(debounce_ms);
+        self
+    }
+
+    /// Flush `max_wait_ms` after a buffer's first event at the latest.
+    #[must_use]
+    pub fn max_wait_ms(mut self, max_wait_ms: u64) -> Self {
+        self.max_wait_ms = Some(max_wait_ms);
+        self
+    }
+
+    /// Flush a buffer once it holds `max_events`, and never carry more in one
+    /// turn.
+    #[must_use]
+    pub fn max_events(mut self, max_events: u32) -> Self {
+        self.max_events = Some(max_events);
+        self
+    }
 }
 
 impl Default for SourcePolicy {
@@ -701,6 +753,7 @@ impl Default for SourcePolicy {
             weight: 0,
             cadence: None,
             budget: None,
+            coalesce: None,
         }
     }
 }

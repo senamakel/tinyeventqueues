@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
+CARGO_TIMEOUT_S = 300
 LIBRARY_KINDS = {
     "lib",
     "rlib",
@@ -195,16 +196,46 @@ def self_test() -> None:
     else:
         raise AssertionError("dependency tree without requested root was accepted")
 
+    def timeout_runner(*args, **kwargs):
+        if kwargs.get("timeout") != CARGO_TIMEOUT_S:
+            raise AssertionError("cargo subprocess did not receive the timeout")
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
 
-def cargo_json(args: list[str], runner: Callable = subprocess.run) -> dict:
-    result = runner(
-        ["cargo", *args], cwd=ROOT, text=True, capture_output=True, check=False
-    )
+    for run in (
+        lambda: cargo_json(["metadata"], timeout_runner),
+        lambda: cargo_tree_names("tinyeventqueues", ["tree"], timeout_runner),
+    ):
+        try:
+            run()
+        except RuntimeError as error:
+            if "timed out" not in str(error):
+                raise AssertionError(f"timeout error lost its context: {error}")
+        else:
+            raise AssertionError("timed out cargo subprocess was accepted")
+
+
+def run_cargo(args: list[str], runner: Callable = subprocess.run) -> str:
+    command = ["cargo", *args]
+    try:
+        result = runner(
+            command,
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=CARGO_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"cargo {' '.join(args)} timed out") from error
     if result.returncode:
         raise RuntimeError(
             f"cargo {' '.join(args)} failed ({result.returncode}):\n{result.stderr}"
         )
-    return json.loads(result.stdout)
+    return result.stdout
+
+
+def cargo_json(args: list[str], runner: Callable = subprocess.run) -> dict:
+    return json.loads(run_cargo(args, runner))
 
 
 def validate_tree(package_name: str, output: str) -> list[str]:
@@ -218,14 +249,7 @@ def validate_tree(package_name: str, output: str) -> list[str]:
 def cargo_tree_names(
     package_name: str, args: list[str], runner: Callable = subprocess.run
 ) -> list[str]:
-    result = runner(
-        ["cargo", *args], cwd=ROOT, text=True, capture_output=True, check=False
-    )
-    if result.returncode:
-        raise RuntimeError(
-            f"cargo {' '.join(args)} failed ({result.returncode}):\n{result.stderr}"
-        )
-    return validate_tree(package_name, result.stdout)
+    return validate_tree(package_name, run_cargo(args, runner))
 
 
 def main() -> int:

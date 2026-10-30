@@ -259,7 +259,12 @@ jobs:
             macOS) module="target/release/lib${library_name}.dylib" ;;
             *) echo "unsupported Unix runner: ${RUNNER_OS}" >&2; exit 1 ;;
           esac
-          cargo run --locked --package tinyeventqueues --example verify_module -- "$module"
+          verify_root="${RUNNER_TEMP}/tinyeventqueues-module-verify"
+          module_name="${module##*/}"
+          install -d -m 700 "$verify_root"
+          install -m 755 "$module" "$verify_root/"
+          cargo run --locked --package tinyeventqueues --example verify_module -- \
+            "$verify_root/$module_name"
 
       - name: Verify Windows module through TinyBus loader
         if: ${{ runner.os == 'Windows' }}

@@ -85,6 +85,11 @@ In order, first verdict wins:
 A durable debounce buffer keyed by `(conversation_key, thread_key, sender)`.
 A buffer flushes `debounce_ms` after its last event or `max_wait_ms` after its
 first, whichever is earlier. Media and control commands flush immediately.
+A source policy may carry its own `coalesce` (`debounce_ms`, `max_wait_ms`,
+`max_events`): its timings replace the pipeline's for that source's buffers,
+a buffer holding `max_events` flushes at once, and a flush hands at most
+`max_events` events to one turn (a larger buffer goes out as several turns, in
+order).
 Events of different threads are never merged; order within a key is preserved.
 An `edit` amends the pending event it targets, a `delete` retracts it (both
 events end `dropped` / `retracted_by_sender`).
@@ -138,10 +143,11 @@ puts it back.
 Two editable, strict JSON files at the repository root; unknown fields are
 errors that name the field.
 
-- `queues.json`: a `tinystoragedrivers` `QueueManifest` declaring every queue
+- `queues.json`: the module's owner-local queue manifest declaring every queue
   (ingress, the four lanes, dead letters) with `max_attempts`,
-  `dedupe_window_ms` and `visibility_ms`. The pipeline applies it at
-  construction. No queue name or spec is written in Rust.
+  `dedupe_window_ms` and `visibility_ms`. The pipeline validates and applies
+  it at construction. Queue names and values live in JSON; Rust owns the
+  declaration type and validation rules.
 - `pipeline.json` ([schema](../../schemas/pipeline.schema.json)): the
   pipeline's tunables, referring to manifest queues by name. Every reference
   must be declared, have a `visibility_ms`, and be used by one role only.

@@ -8,6 +8,7 @@ use crate::ports::{Clock, DocumentStore, QueueStore};
 use tinyeventqueues_bus::PipelineConfig;
 
 use super::{Inner, Pipeline, Running};
+use crate::Result;
 use crate::cadence::Scheduler;
 use crate::clock::system_clock;
 use crate::coalesce::Coalescer;
@@ -24,7 +25,6 @@ use crate::observe::{NoopSink, OutcomeSink};
 use crate::salience::Habituation;
 use crate::store::{self, Ledger, Tombstones};
 use crate::turn::{Conversations, Lanes, Threads};
-use crate::{Error, Result};
 
 /// Where a file-backed setting comes from.
 #[derive(Debug, Clone)]
@@ -133,17 +133,15 @@ impl PipelineBuilder {
     ///
     /// # Errors
     ///
-    /// [`Error::Manifest`] or [`Error::Config`] naming the offending field,
-    /// [`Error::ConfigFile`] for an unreadable file, or a storage error while
-    /// declaring queues and collections.
+    /// [`crate::Error::Manifest`] or [`crate::Error::Config`] naming the
+    /// offending field, [`crate::Error::ConfigFile`] for an unreadable file,
+    /// or a storage error while declaring queues and collections.
     pub async fn build(self) -> Result<Pipeline> {
         let manifest = match self.manifest {
             Source::Shipped => shipped_manifest()?,
             Source::Path(path) => load_manifest(path)?,
             Source::Value(manifest) => {
-                manifest
-                    .validate()
-                    .map_err(|error| Error::manifest(error.to_string()))?;
+                manifest.validate()?;
                 manifest
             }
         };

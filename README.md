@@ -34,10 +34,11 @@ or misspelt field is an error naming its JSON path.
 
 | File | What it holds | Schema |
 | --- | --- | --- |
-| [`queues.json`](queues.json) | Every queue the pipeline uses (ingress, the four lanes, dead letters) with `max_attempts`, `dedupe_window_ms` and `visibility_ms` — a tinystoragedrivers `QueueManifest`, applied at construction | `schemas/queues.schema.json` in tinystoragedrivers |
-| [`pipeline.json`](pipeline.json) | The pipeline's tunables: which queue plays which role, lane concurrency, per-source ack policy, tombstone TTL, batch size, gate (sender lists, DM/group policy, bot-loop guard, rate limits, ambient buffer) coalescing (debounce, max wait, control prefixes), salience (weights, keywords, known contacts, lane thresholds, borderline band, habituation), lane backlog limits, cadences and ingestion budgets per lane or source, and the digest | [`schemas/pipeline.schema.json`](schemas/pipeline.schema.json) |
+| [`queues.json`](queues.json) | Every queue the pipeline uses (ingress, the four lanes, dead letters) with `max_attempts`, `dedupe_window_ms` and `visibility_ms` — the owner-local queue manifest, applied at construction | Validated by tinyeventqueues |
+| [`pipeline.json`](pipeline.json) | The pipeline's tunables: which queue plays which role, lane concurrency, per-source ack policy, tombstone TTL, batch size, gate (sender lists, DM/group policy, bot-loop guard, rate limits, ambient buffer) coalescing (debounce, max wait, control prefixes, and a source's own debounce and batch cap in `sources[].coalesce`), salience (weights, keywords, known contacts, lane thresholds, borderline band, habituation), lane backlog limits, cadences and ingestion budgets per lane or source, and the digest | [`schemas/pipeline.schema.json`](schemas/pipeline.schema.json) |
 
-No queue name or queue spec is written in Rust. To add or tune a queue, edit
+Queue names and values live in `queues.json`; Rust defines the owner-local
+manifest type and validates each declaration. To add or tune a queue, edit
 `queues.json`; to route a role to it, edit `pipeline.json`.
 
 ## Usage

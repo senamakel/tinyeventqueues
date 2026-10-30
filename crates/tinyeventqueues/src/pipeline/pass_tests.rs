@@ -8,8 +8,8 @@ use std::sync::Arc;
 use crate::ports::NewMessage;
 use serde_json::json;
 use tinyeventqueues_bus::{
-    Disposition, EventKind, EventRef, InboundEvent, Lane, MediaRef, RateLimit, Reason,
-    SalienceClass, Sender,
+    Disposition, EventKind, EventRef, InboundEvent, Lane, MediaRef, PipelineConfig, RateLimit,
+    Reason, SalienceClass, Sender, SourcePolicy,
 };
 
 use crate::CollectingSink;
@@ -517,4 +517,74 @@ async fn the_pass_runs_on_a_backend_without_dedupe_or_groups() {
     // A redelivery is still recognized.
     let again = pipeline.ingest(vec![mention("1", "a")]).await.unwrap();
     assert_eq!(again.results[0].disposition, Disposition::Duplicate);
+}
+
+/// The shipped pipeline with `coalesce` as `x:mentions`' own debounce.
+fn with_source_debounce(coalesce: tinyeventqueues_bus::SourceCoalesce) -> PipelineConfig {
+    let mut config = shipped_pipeline_config().unwrap();
+    let mut own = SourcePolicy::new("x:mentions");
+    own.weight = 50;
+    own.coalesce = Some(coalesce);
+    config.sources.insert(0, own);
+    config
+}
+
+fn x_mention(id: &str) -> InboundEvent {
+    let mut event = event("x:mentions", id, "mentions");
+    event.kind = EventKind::Trigger;
+    event.sender = Sender::new("x:mentions");
+    event
+}
+
+#[tokio::test]
+async fn a_source_debounce_replaces_the_pipeline_one_for_that_source_only() {
+    let fixture = Fixture::new();
+    let config = with_source_debounce(
+        tinyeventqueues_bus::SourceCoalesce::new()
+            .debounce_ms(30_000)
+            .max_wait_ms(300_000),
+    );
+    let pipeline = fixture.builder().config(config).build().await.unwrap();
+    pipeline
+        .ingest(vec![x_mention("1"), x_mention("2"), mention("3", "c")])
+        .await
+        .unwrap();
+    pipeline.drain().await.unwrap();
+    // The pipeline's own 10 s max wait flushes the other source only.
+    fixture.clock.advance(10_000);
+    assert_eq!(pipeline.drain().await.unwrap().flushed, 1);
+    pipeline.ingest(vec![x_mention("4")]).await.unwrap();
+    pipeline.drain().await.unwrap();
+    fixture.clock.advance(29_999);
+    assert_eq!(pipeline.drain().await.unwrap().flushed, 0);
+    fixture.clock.advance(1);
+    assert_eq!(pipeline.drain().await.unwrap().flushed, 1);
+    let turns = take_turns(&fixture, &pipeline, Lane::Interactive).await;
+    let batches: Vec<_> = turns.iter().map(|t| ids(&t.events).join(",")).collect();
+    assert_eq!(batches, ["3", "1,2,4"]);
+}
+
+#[tokio::test]
+async fn a_full_source_buffer_flushes_at_once_in_turns_of_at_most_max_events() {
+    let fixture = Fixture::new();
+    let config = with_source_debounce(
+        tinyeventqueues_bus::SourceCoalesce::new()
+            .debounce_ms(30_000)
+            .max_events(2),
+    );
+    let pipeline = fixture.builder().config(config).build().await.unwrap();
+    pipeline.ingest(vec![x_mention("1")]).await.unwrap();
+    assert_eq!(pipeline.drain().await.unwrap().flushed, 0);
+    // The second event fills the buffer: it goes out without the debounce.
+    pipeline.ingest(vec![x_mention("2")]).await.unwrap();
+    assert_eq!(pipeline.drain().await.unwrap().flushed, 1);
+    // A burst taken in one pass is split rather than carried in one turn.
+    let burst: Vec<_> = (3..=7).map(|i| x_mention(&i.to_string())).collect();
+    pipeline.ingest(burst).await.unwrap();
+    pipeline.drain().await.unwrap();
+    fixture.clock.advance(30_000);
+    pipeline.drain().await.unwrap();
+    let turns = take_turns(&fixture, &pipeline, Lane::Interactive).await;
+    let batches: Vec<_> = turns.iter().map(|t| ids(&t.events).join(",")).collect();
+    assert_eq!(batches, ["1,2", "3,4", "5,6", "7"]);
 }

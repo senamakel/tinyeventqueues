@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "tinyeventqueues"
-version = "0.1.2"
+version = "0.2.3"
 dependencies = [
  "async-trait",
  "data-encoding",
@@ -1026,7 +1026,7 @@ dependencies = [
 
 [[package]]
 name = "tinyeventqueues-bus"
-version = "0.1.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
