@@ -526,32 +526,7 @@ async fn the_linked_module_without_host_storage_fails_closed() {
 #[cfg(all(target_os = "linux", not(feature = "static-link")))]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_loaded_module_uses_only_its_invocation_storage_address() {
-    let source = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("libtinyeventqueues.so");
-    assert!(
-        source.is_file(),
-        "test cdylib is missing: {}",
-        source.display()
-    );
-    let dir = std::env::current_dir()
-        .unwrap()
-        .join("target")
-        .join(format!("callback-module-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let artifact = dir.join("libtinyeventqueues.so");
-    std::fs::copy(&source, &artifact).unwrap();
-    let hash = tinybus::module::sha256_file(&artifact).unwrap();
-    std::fs::write(
-        dir.join("modules.toml"),
-        format!("\"libtinyeventqueues.so\" = \"{hash}\"\n"),
-    )
-    .unwrap();
+    let (dir, artifact) = trusted_module_artifact("invocation");
 
     let bus = MemoryBus::new();
     let broker = Broker::new();
@@ -635,5 +610,102 @@ async fn a_loaded_module_uses_only_its_invocation_storage_address() {
             .await
             .is_err()
     );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// Stage a caller-selected build as operator-trusted test input, never a release pin.
+#[cfg(all(target_os = "linux", not(feature = "static-link")))]
+fn trusted_module_artifact(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+    let source = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("libtinyeventqueues.so");
+    assert!(
+        source.is_file(),
+        "test cdylib is missing: {}",
+        source.display()
+    );
+    let dir = std::env::current_dir()
+        .unwrap()
+        .join("target")
+        .join(format!("callback-module-{label}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let artifact = dir.join("libtinyeventqueues.so");
+    std::fs::copy(&source, &artifact).unwrap();
+    let hash = tinybus::module::sha256_file(&artifact).unwrap();
+    std::fs::write(
+        dir.join("modules.toml"),
+        format!("\"libtinyeventqueues.so\" = \"{hash}\"\n"),
+    )
+    .unwrap();
+    (dir, artifact)
+}
+
+#[cfg(all(target_os = "linux", not(feature = "static-link")))]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_loaded_module_uses_its_attested_storage_callback() {
+    let (dir, artifact) = trusted_module_artifact("bound-storage");
+    let bus = MemoryBus::new();
+    let broker = Broker::new();
+    let _broker_task = broker.clone().spawn(bus.clone());
+    let modules = tinybus::module::ModuleHost::new(broker);
+    let binding = tinystoragedrivers_busproxy::prepare_storage_host_callbacks(&modules)
+        .await
+        .unwrap();
+    let backend = MemoryBackend::new();
+    let storage = backend.for_scope(&Scope::new("callback").unwrap()).unwrap();
+    let endpoint = PerCallerEndpoint::new(move |_| Some(StorageServer::new(storage.clone())));
+    let served = tinystoragedrivers_busproxy::serve_with_host_callbacks(
+        Arc::clone(&binding),
+        Arc::new(endpoint),
+    )
+    .await
+    .unwrap();
+    modules
+        .load_file_with_host_callbacks(
+            &artifact,
+            json!({
+                "storage_callback": binding.unique_name().as_str(),
+                "timer": {"enabled": false}
+            }),
+            &binding,
+        )
+        .await
+        .unwrap();
+    modules.ensure_ready(names::INTERFACE).await.unwrap();
+    let client = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let proxy = client
+        .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
+        .unwrap();
+    let event = InboundEvent::new(
+        "callback",
+        "stored",
+        "conversation",
+        Sender::new("user"),
+        EventKind::Message,
+        1,
+    );
+    let response: IngestResponse = proxy
+        .call(names::methods::INGEST, (IngestRequest::new(vec![event]),))
+        .await
+        .unwrap();
+    assert_eq!(response.results[0].disposition, Disposition::Accepted);
+    let stats: StatsResponse = proxy
+        .call(names::methods::STATS, (StatsRequest::new(),))
+        .await
+        .unwrap();
+    assert_eq!(stats.queues.iter().map(|queue| queue.ready).sum::<u64>(), 1);
+    assert!(
+        tinystoragedrivers_busproxy::connect_storage_at(client, binding.unique_name().clone())
+            .await
+            .is_err()
+    );
+    served.shutdown().await.unwrap();
     std::fs::remove_dir_all(dir).unwrap();
 }

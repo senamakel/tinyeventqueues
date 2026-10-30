@@ -2,6 +2,7 @@
 
 use std::io;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tinybus::Connection;
@@ -9,6 +10,10 @@ use tinybus::broker::Broker;
 use tinybus::module::ModuleHost;
 use tinybus::transport::memory::MemoryBus;
 use tinyeventqueues::{StatsRequest, StatsResponse, names};
+use tinystoragedrivers_api::StorageBackend;
+use tinystoragedrivers_busproxy::{PerCallerEndpoint, StorageServer};
+use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::Scope;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,6 +22,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broker = Broker::new();
     let broker_task = broker.spawn(bus.clone());
     let module_host = ModuleHost::new(broker);
+    // This verifier is the storage host; the production module selects no engine.
+    let storage_host = Connection::connect(bus.connect().await?).await?;
+    let backend = MemoryBackend::new();
+    let storage = backend.for_scope(&Scope::new("module-verification")?)?;
+    let endpoint = PerCallerEndpoint::new(move |_| Some(StorageServer::new(storage.clone())));
+    let _served = tinystoragedrivers_busproxy::serve(&storage_host, Arc::new(endpoint)).await?;
     let info = module_host.load_file(&module)?;
 
     if info.name != env!("CARGO_PKG_NAME") {

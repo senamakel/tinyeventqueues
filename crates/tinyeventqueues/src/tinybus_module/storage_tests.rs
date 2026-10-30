@@ -166,41 +166,15 @@ async fn an_issued_invocation_address_is_caller_bound_and_revocable() {
 }
 
 #[tokio::test]
-async fn an_explicit_callback_reaches_its_host_storage() {
+async fn an_unattested_callback_is_refused_even_when_it_serves_storage() {
     let rig = rig(true).await;
     let module = Connection::connect(rig.bus.connect().await.unwrap())
         .await
         .unwrap();
-    let backing = open_callback(module, rig.host.unique_name().unwrap().clone())
-        .await
-        .unwrap();
-    for declaration in collection_specs() {
-        backing
-            .docs
-            .ensure_collection(&collection_spec(declaration))
-            .await
-            .unwrap();
-    }
-    backing
-        .docs
-        .put(
-            OUTCOMES,
-            "callback",
-            serde_json::json!({"stored": true}),
-            Precondition::None,
-        )
-        .await
-        .unwrap();
-    let host = rig
-        .backend
-        .for_scope(&Scope::new("local").unwrap())
-        .unwrap();
+    let result = open_callback(module, rig.host.unique_name().unwrap().clone()).await;
     assert!(
-        host.documents()
-            .get(OUTCOMES, "callback")
-            .await
-            .unwrap()
-            .is_some()
+        result.is_err(),
+        "ordinary peers must not acquire callback authority"
     );
 }
 
