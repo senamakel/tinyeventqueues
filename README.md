@@ -108,6 +108,9 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets --all-features
 cargo test --all-features
+# Build the cdylib before running default-feature native loader tests.
+cargo build --workspace
+cargo test
 cargo run -p tinyeventqueues --example basic
 .github/scripts/check-file-coverage.sh 90 coverage.json   # needs cargo-llvm-cov
 ```

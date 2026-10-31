@@ -168,10 +168,13 @@ are in `tinyeventqueues-bus`.
   declared by `tinyeventqueues-bus::storage::collection_specs()`
   (owner `teq`, module scope), from which the host derives the grant; its
   queues are those `queues.json` declares, served by the host's queue port.
-  Without the callback destination, setup fails; there is no in-memory
-  fallback.
+  An explicit `storage_address` or `storage_callback` never falls back to
+  another route. With neither field, the module uses the host's ordinary
+  caller-scoped storage endpoint and fails if it is unavailable. There is no
+  in-memory fallback.
 - Configuration: the host-provided private blob carries `storage_address`
-  (the host-issued invocation storage route), plus `queues` (a `queues.json`
+  (the host-issued invocation storage route) or a mutually exclusive
+  `storage_callback` (an attested unique host peer), plus `queues` (a `queues.json`
   document), `pipeline` (a `pipeline.json` document) and `timer` bounds;
   absent fields run the shipped files. The manifest is applied through the
   queue port at setup.
