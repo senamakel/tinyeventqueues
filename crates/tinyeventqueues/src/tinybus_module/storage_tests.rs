@@ -187,3 +187,16 @@ async fn a_missing_callback_never_uses_working_global_storage() {
     let missing = tinybus::BusName::new(":1.999999").unwrap();
     assert!(open_callback(module, missing).await.is_err());
 }
+
+#[tokio::test]
+async fn a_well_known_callback_name_cannot_borrow_working_global_storage() {
+    let rig = rig(true).await;
+    let module = Connection::connect(rig.bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let peer = BusName::new("ai.tinyhumans.tinystorage").unwrap();
+    let error = open_callback(module, peer).await.unwrap_err();
+    let message = error.to_string();
+    assert!(message.contains("storage_callback"), "{message}");
+    assert!(message.contains("expected a unique host peer"), "{message}");
+}
