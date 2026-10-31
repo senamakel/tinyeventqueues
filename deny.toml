@@ -51,4 +51,4 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # TinyStorageDrivers is pinned to its reviewed v2 fork revision until v2.0.2
 # is published from the canonical repository.
-allow-git = ["https://github.com/senamakel/tinystoragedrivers"]
+allow-git = ["https://github.com/tinyhumansai/tinystoragedrivers"]
